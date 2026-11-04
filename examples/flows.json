@@ -1,0 +1,37 @@
+{
+  "title": "Flujos de operación · tienda online (ejemplo)",
+  "flows": [
+    {
+      "id": "checkout", "type": "flowchart", "title": "Flujo de compra",
+      "description": "Desde el carrito hasta la confirmación del pedido",
+      "nodes": [
+        {"id": "a", "label": "Cliente confirma carrito", "kind": "start"},
+        {"id": "b", "label": "Validar stock", "kind": "process"},
+        {"id": "c", "label": "¿Hay stock?", "kind": "decision"},
+        {"id": "d", "label": "Cobrar con pasarela", "kind": "io"},
+        {"id": "e", "label": "Informar quiebre de stock", "kind": "risk"},
+        {"id": "f", "label": "¿Pago aprobado?", "kind": "decision"},
+        {"id": "g", "label": "Crear pedido y enviar correo", "kind": "process"},
+        {"id": "h", "label": "Pedido confirmado", "kind": "end"}
+      ],
+      "edges": [
+        {"from": "a", "to": "b"}, {"from": "b", "to": "c"},
+        {"from": "c", "to": "d", "label": "sí"}, {"from": "c", "to": "e", "label": "no"},
+        {"from": "d", "to": "f"}, {"from": "f", "to": "g", "label": "sí"},
+        {"from": "f", "to": "d", "label": "reintento"}, {"from": "g", "to": "h"}
+      ]
+    },
+    {
+      "id": "login", "type": "sequence", "title": "Inicio de sesión",
+      "description": "Secuencia entre navegador, API y Redis",
+      "actors": [{"id": "U", "label": "Navegador"}, {"id": "A", "label": "API"}, {"id": "R", "label": "Redis"}],
+      "messages": [
+        {"from": "U", "to": "A", "label": "POST /login"},
+        {"from": "A", "to": "A", "label": "validar credenciales"},
+        {"from": "A", "to": "R", "label": "guardar sesión"},
+        {"from": "R", "to": "A", "label": "ok", "kind": "return"},
+        {"from": "A", "to": "U", "label": "token JWT", "kind": "return"}
+      ]
+    }
+  ]
+}

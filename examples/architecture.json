@@ -1,0 +1,25 @@
+{
+  "title": "Tienda online · arquitectura (ejemplo)",
+  "subtitle": "Datos ficticios para demostrar el formato",
+  "groups": [
+    {"id": "backend", "label": "Backend · Node.js", "icon": "nodejs"},
+    {"id": "datos", "label": "Datos", "icon": "database", "style": "dashed"}
+  ],
+  "nodes": [
+    {"id": "user", "name": "Cliente", "role": "navegador", "icon": "browser"},
+    {"id": "web", "name": "Web", "role": "React SPA", "icon": "react"},
+    {"id": "api", "name": "API REST", "role": "Express", "icon": "express", "group": "backend"},
+    {"id": "auth", "name": "Autenticación", "role": "JWT", "icon": "lock", "group": "backend"},
+    {"id": "db", "name": "PostgreSQL", "role": "pedidos y clientes", "icon": "postgresql", "group": "datos"},
+    {"id": "cache", "name": "Redis", "role": "sesiones", "icon": "redis", "group": "datos"},
+    {"id": "job", "name": "Cron de facturación", "role": "batch nocturno", "icon": "clock"}
+  ],
+  "edges": [
+    {"from": "user", "to": "web", "label": "HTTPS", "kind": "primary"},
+    {"from": "web", "to": "api", "label": "REST", "kind": "primary"},
+    {"from": "api", "to": "db", "label": "SQL", "kind": "primary"},
+    {"from": "api", "to": "auth", "kind": "internal"},
+    {"from": "auth", "to": "cache", "label": "sesión", "kind": "internal"},
+    {"from": "job", "to": "db", "label": "batch", "kind": "dashed"}
+  ]
+}

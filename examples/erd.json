@@ -1,0 +1,32 @@
+{
+  "title": "Tienda online · modelo de datos (ejemplo)",
+  "subtitle": "Volúmenes ficticios (source: ejemplo) para demostrar la proyección",
+  "entities": [
+    {"name": "customers", "columns": [
+        {"name": "id", "type": "bigint", "pk": true},
+        {"name": "email", "type": "varchar(120)"},
+        {"name": "created_at", "type": "timestamp"}],
+     "volume": {"rows": 120000, "growth_pct_month": 2, "avg_row_bytes": 300, "source": "ejemplo"}},
+    {"name": "orders", "columns": [
+        {"name": "id", "type": "bigint", "pk": true},
+        {"name": "customer_id", "type": "bigint", "fk": "customers.id"},
+        {"name": "total", "type": "numeric(12,2)"},
+        {"name": "created_at", "type": "timestamp"}],
+     "volume": {"rows": 900000, "growth_pct_month": 4, "avg_row_bytes": 180, "source": "ejemplo"}},
+    {"name": "order_items", "columns": [
+        {"name": "id", "type": "bigint", "pk": true},
+        {"name": "order_id", "type": "bigint", "fk": "orders.id"},
+        {"name": "product_id", "type": "bigint", "fk": "products.id"},
+        {"name": "qty", "type": "int"}],
+     "volume": {"rows": 3200000, "growth_pct_month": 4, "avg_row_bytes": 90, "source": "ejemplo"}},
+    {"name": "products", "columns": [
+        {"name": "id", "type": "bigint", "pk": true},
+        {"name": "name", "type": "varchar(200)"},
+        {"name": "price", "type": "numeric(12,2)"}],
+     "volume": {"rows": 8000, "rows_per_month": 150, "avg_row_bytes": 400, "source": "ejemplo"}},
+    {"name": "audit_log", "columns": [
+        {"name": "id", "type": "bigint", "pk": true},
+        {"name": "entity", "type": "varchar(40)"},
+        {"name": "payload", "type": "jsonb", "inferred": true}]}
+  ]
+}
