@@ -66,6 +66,11 @@ def index(args):
 
 
 def main():
+    for s in (sys.stdout, sys.stderr):  # Windows: evita UnicodeEncodeError con cp1252
+        try:
+            s.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     cmds = {"analyze": lambda a: __import__("analyze").main(a), "flows": lambda a: __import__("flows").main(a),
             "arch": lambda a: __import__("arch").main(a), "erd": lambda a: __import__("erd").main(a), "png": png, "index": index}
     if len(sys.argv) < 2 or sys.argv[1] not in cmds:
