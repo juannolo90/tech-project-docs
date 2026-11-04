@@ -19,9 +19,9 @@ Ejemplo (datos ficticios): ver `examples/`.
 
 ```bash
 # Claude Code / agentes compatibles
-npx skills add OWNER/tech-project-docs
+npx skills add juannolo90/tech-project-docs
 # o manual
-git clone https://github.com/OWNER/tech-project-docs ~/.claude/skills/tech-project-docs
+git clone https://github.com/juannolo90/tech-project-docs ~/.claude/skills/tech-project-docs
 ```
 
 Requisitos: Python 3.9+ (solo librería estándar). Opcional para revisar los diagramas como imagen: `pip install playwright && python3 -m playwright install chromium`.

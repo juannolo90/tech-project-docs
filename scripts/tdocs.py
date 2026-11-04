@@ -60,7 +60,7 @@ def index(args):
         for f in sorted(p.iterdir()):
             if f.suffix in (".drawio", ".md", ".html", ".json", ".mmd"):
                 L.append(f"- [{f.name}]({d}/{f.name})")
-    L.append("\n---\nGenerado con [tech-project-docs](https://github.com/OWNER/tech-project-docs).")
+    L.append("\n---\nGenerado con [tech-project-docs](https://github.com/juannolo90/tech-project-docs).")
     write(out / "README.md", "\n".join(L) + "\n")
     print(f"OK índice → {out}/README.md")
 
