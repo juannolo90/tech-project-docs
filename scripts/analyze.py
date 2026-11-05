@@ -3,7 +3,7 @@
 Genera <out>/00-grafo/graph.json y GRAPH_REPORT.md. Solo librería estándar.
 SEGURIDAD: nunca lee archivos .env reales (solo .env.example/.sample/.template, y solo los NOMBRES de variables).
 """
-import json, os, re, subprocess, collections, pathlib
+import hashlib, json, os, re, subprocess, collections, pathlib
 from common import write
 
 IGNORE_DIRS = {".git", "node_modules", "dist", "build", "out", ".next", ".nuxt", "venv", ".venv", "env", "__pycache__",
@@ -263,11 +263,48 @@ def parse_prisma(text):
     return out
 
 
-def analyze(root, out_dir, mask_ips=False):
+def fingerprint(files, mask):
+    """Huella barata (ruta+tamaño+mtime): detecta si el repo cambió SIN leer el contenido de ningún archivo."""
+    h = hashlib.sha1(f"mask={mask};v=2".encode())
+    for rel in sorted(files):
+        try:
+            st = files[rel].stat()
+            h.update(f"{rel}|{st.st_size}|{int(st.st_mtime)}\n".encode())
+        except OSError:
+            pass
+    return h.hexdigest()
+
+
+def graph_html(root, out_dir, graph):
+    """graph.html: si el repo ya trae un grafo (graphify-out/graph.json) se reutiliza tal cual; si no, el propio."""
+    import graph as G
+    gf = pathlib.Path(root) / "graphify-out" / "graph.json"
+    src = graph
+    if gf.exists():
+        try:
+            src = G.import_nodelink(gf)
+            src["root"] = graph.get("root", src.get("root"))
+        except Exception:
+            src = graph
+    return G.write_html(src, out_dir)
+
+
+def analyze(root, out_dir, mask_ips=False, force=False):
     root = pathlib.Path(root).resolve()
     files = {}
     for p in walk(root):
         files[p.relative_to(root).as_posix()] = p
+    fp = fingerprint(files, mask_ips)
+    prev = pathlib.Path(out_dir) / "00-grafo" / "graph.json"
+    if prev.exists() and not force:
+        try:
+            old = json.loads(prev.read_text(encoding="utf-8"))
+            if old.get("fingerprint") == fp:
+                graph_html(root, out_dir, old)
+                old["_reused"] = True
+                return old
+        except Exception:
+            pass
     nodes, edges = {}, []
     langs, ext_deps = collections.Counter(), collections.defaultdict(set)
     routes, envs, tables, ddl_tables, comps = [], {}, collections.defaultdict(set), [], {}
@@ -408,12 +445,13 @@ def analyze(root, out_dir, mask_ips=False):
         "external_deps": {k: sorted(v) for k, v in sorted(ext_deps.items())},
         "suggested_components": [{"category": a, "name": b, "icon": c} for a, b, c in suggested],
         "schema_ddl": list(all_tables.values()), "tables_referenced_in_code": inferred,
-        "network_hints": finish_net(hints, mask_ips),
+        "network_hints": finish_net(hints, mask_ips), "fingerprint": fp,
     }
     graph["routes"] = [{"kind": k, "method": m, "path": p, "file": f} for k, m, p, f in graph["routes"]]
     out = pathlib.Path(out_dir) / "00-grafo"
     write(out / "graph.json", json.dumps(graph, indent=2, ensure_ascii=False))
     write(out / "GRAPH_REPORT.md", report(graph, manifests))
+    graph_html(root, out_dir, graph)
     return graph
 
 
@@ -467,7 +505,11 @@ def main(args):
     ap = argparse.ArgumentParser(prog="tdocs analyze")
     ap.add_argument("repo")
     ap.add_argument("-o", "--out", default="docs")
+    ap.add_argument("--force", action="store_true", help="re-analiza aunque el grafo vigente coincida con el repo")
     ap.add_argument("--mask-ips", action="store_true", help="enmascara IPs (a.b.x.x) en graph.json y el reporte")
     a = ap.parse_args(args)
-    g = analyze(a.repo, a.out, a.mask_ips)
+    g = analyze(a.repo, a.out, a.mask_ips, a.force)
+    if g.pop("_reused", False):
+        print(f"OK grafo vigente (el repo no cambió): se REUTILIZA, no se relee el código → {a.out}/00-grafo/  (usa --force para rehacerlo)")
+        return
     print(f"OK grafo: {len(g['nodes'])} archivos, {len(g['edges'])} aristas, {len(g['entry_points'])} entradas → {a.out}/00-grafo/")

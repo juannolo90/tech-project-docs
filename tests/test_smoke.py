@@ -100,6 +100,86 @@ class Smoke(unittest.TestCase):
             run("net", str(pathlib.Path(out) / "spec/network.json"), "-o", out)
             self.assertTrue((pathlib.Path(out) / "02-arquitectura/red.html").exists())
 
+    def test_graph_reuse_and_html(self):
+        with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as out:
+            r = pathlib.Path(repo)
+            (r / "a.js").write_text("import './b.js';" + chr(10))
+            (r / "b.js").write_text("export const b = 1;" + chr(10))
+            first = run("analyze", str(r), "-o", out)
+            self.assertIn("OK grafo:", first)
+            self.assertTrue((pathlib.Path(out) / "00-grafo/graph.html").exists())
+            self.assertIn("REUTILIZA", run("analyze", str(r), "-o", out))        # repo sin cambios: no relee
+            (r / "c.js").write_text("export const c = 1;" + chr(10))
+            self.assertIn("OK grafo:", run("analyze", str(r), "-o", out))        # cambió: re-analiza
+            self.assertIn("REUTILIZA", run("analyze", str(r), "-o", out))
+            self.assertIn("OK grafo:", run("analyze", str(r), "-o", out, "--force"))
+
+    def test_graph_import_nodelink(self):
+        with tempfile.TemporaryDirectory() as out:
+            gj = pathlib.Path(out) / "g.json"
+            gj.write_text(json.dumps({"nodes": [{"id": "a", "label": "A", "community": 0}, {"id": "b", "label": "B", "community": 1}],
+                                      "links": [{"source": "a", "target": "b", "relation": "calls"}]}))
+            run("graph", "--from", str(gj), "-o", out)
+            html = (pathlib.Path(out) / "00-grafo/graph.html").read_text(encoding="utf-8")
+            self.assertIn('"nodes"', html)
+            self.assertIn("canvas", html)
+
+    def test_arch_pending_questions(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import arch
+        q = arch.check({"nodes": [{"id": "a", "name": "API", "icon": "express"}, {"id": "b", "name": "BD", "icon": "database", "site": "AWS", "ip": "10.0.0.1"},
+                                  {"id": "u", "name": "Usuario", "icon": "user"}],
+                        "edges": [{"from": "a", "to": "b", "kind": "dashed"}]})
+        blob = " ".join(q)
+        self.assertIn("sitio/servidor corre «API»", blob)
+        self.assertIn("IP u hostname de «API»", blob)
+        self.assertIn("integración", blob)
+        self.assertNotIn("«BD»? (on-prem", blob)
+        self.assertNotIn("Usuario", blob)
+
+    def test_volume_sample_and_rates(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import erd, volsql
+        spec = {"entities": [
+            {"name": "projects", "columns": [{"name": "id", "type": "int", "pk": True}, {"name": "created_at", "type": "datetime"}],
+             "volume": {"rows": 1000, "sample": {"days": 7, "rows": 70, "date_column": "created_at"}}},
+            {"name": "tasks", "columns": [{"name": "id", "type": "int", "pk": True}],
+             "volume": {"rows": 8000, "per_parent": {"entity": "projects", "ratio": 8}}},
+            {"name": "logs", "columns": [{"name": "id", "type": "int"}], "volume": {"rows": 5, "rows_per_day": 10, "source": "supuesto"}}]}
+        erd.normalize(spec)
+        self.assertAlmostEqual(spec["entities"][0]["volume"]["rows_per_month"], 300)     # 70/7*30
+        self.assertEqual(spec["entities"][0]["volume"]["source"], "medido")
+        self.assertAlmostEqual(spec["entities"][1]["volume"]["rows_per_month"], 2400)    # 300*8
+        self.assertAlmostEqual(spec["entities"][2]["volume"]["rows_per_month"], 300)     # 10*30
+        self.assertEqual(volsql.date_column(spec["entities"][0]), "created_at")
+        sql, nodate = volsql.build_sql(spec, "postgres", 7)
+        self.assertIn("now() - interval '7 days'", sql)
+        self.assertEqual(nodate, ["tasks", "logs"])
+        self.assertEqual(volsql.build_sql({"entities": [{"name": "x; DROP TABLE y", "columns": []}]}, "mssql", 7)[0].count("DROP"), 1)  # solo en comentario
+        self.assertNotIn("FROM x; DROP", volsql.build_sql({"entities": [{"name": "x; DROP TABLE y", "columns": []}]}, "mssql", 7)[0])
+
+    def test_volapply_and_report(self):
+        with tempfile.TemporaryDirectory() as out:
+            o = pathlib.Path(out)
+            (o / "spec").mkdir()
+            (o / "spec/erd.json").write_text(json.dumps({"title": "t", "entities": [
+                {"name": "orders", "columns": [{"name": "id", "type": "int", "pk": True}, {"name": "created_at", "type": "datetime"}]}]}))
+            (o / "res.csv").write_text("tabla,filas_total,filas_7d,desde,hasta,columna_fecha" + chr(10) + "orders,12000,140,2025-01-01,2026-11-01,created_at" + chr(10))
+            run("volapply", str(o / "res.csv"), str(o / "spec/erd.json"))
+            v = json.loads((o / "spec/erd.json").read_text(encoding="utf-8"))["entities"][0]["volume"]
+            self.assertEqual((v["rows"], v["sample"]["rows"], v["source"]), (12000, 140, "medido"))
+            run("erd", str(o / "spec/erd.json"), "-o", out)
+            self.assertIn("muestra 7 d", (o / "03-modelo-datos/volumenes.md").read_text(encoding="utf-8"))
+            run("net", str(ROOT / "examples/network.json"), "-o", out)
+            run("report", "-o", out, "--title", "Demo")
+            html = (o / "documentacion.html").read_text(encoding="utf-8")
+            self.assertIn("Demo", html)
+            self.assertIn("Presentar", html)
+            self.assertIn("<iframe", html)                      # red.html embebido
+            self.assertIn('disabled', html)                     # secciones no generadas (grafo, flujos) deshabilitadas
+            run("report", "-o", out, "--mask-ips")
+            self.assertNotIn("10.20.4.22", (o / "documentacion.html").read_text(encoding="utf-8"))
+
     def test_growth_projection(self):
         sys.path.insert(0, str(ROOT / "scripts"))
         import erd

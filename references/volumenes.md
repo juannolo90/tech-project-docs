@@ -1,6 +1,8 @@
 # Cómo medir volúmenes (solo lectura)
 
-Pide al dueño de la base que ejecute esto con un usuario de solo lectura y pegue el resultado. No ejecutes consultas contra producción por tu cuenta.
+Pregunta primero al usuario si puedes consultar la BD (solo lectura). Si no, que ejecute esto con un usuario de solo lectura y pegue el resultado. No ejecutes nada sin su confirmación y nunca guardes credenciales.
+
+**Atajo:** `tdocs volsql erd.json --dialect <motor>` genera `consultas-volumen.sql` con el total y una **muestra de 7 días** por tabla (usa su columna de fecha); `tdocs volapply resultados.csv` aplica el resultado al `erd.json`. Si la tabla no tiene fecha o no hay acceso, pregunta tasas de negocio (`rows_per_day`, `per_parent`).
 
 ## Filas y tamaño por tabla
 

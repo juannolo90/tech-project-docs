@@ -12,9 +12,14 @@
 | 2 | Flujos de operación | `docs/01-flujos/*.svg`, `flujos.html`, `flujos.md` (Mermaid) |
 | 3 | Arquitectura con iconos | `docs/02-arquitectura/arquitectura.drawio` + `.svg` |
 | 3b | **Red y despliegue** (sitios on-prem/AWS/Azure/SAP, segmentos/CIDR, IPs, firewalls/VPN, flujos numerables) | `docs/02-arquitectura/red.html` (interactivo), `red.svg`, `red-pendientes.md` |
+| 1b | **Visor del grafo** (reutiliza grafos existentes, p. ej. graphify, sin releer el código) | `docs/00-grafo/graph.html` |
 | 4 | Modelo ER + volúmenes | `docs/03-modelo-datos/modelo-datos.drawio`, `.svg`, `volumenes.md`, `.mmd` |
 
 Ejemplo (datos ficticios): ver `examples/`.
+
+**Todo en un HTML:** `docs/documentacion.html` reúne grafo, flujos, arquitectura, red, datos/volúmenes y pendientes en pestañas, con modo presentación (tecla `P`, flechas ← →).
+
+**Ahorro de tokens:** si ya existe `docs/00-grafo/graph.json` (o un `graphify-out/`), la skill lo reutiliza; `analyze` detecta con una huella de archivos si el repo cambió y no relee el código.
 
 **Red y despliegue:** el analizador detecta IPs, CIDR, hosts cloud y puertos en código/config (nunca `.env` reales) y la skill **pregunta** lo que no puede saber (sitio de cada IP, segmentos, firewalls/VPN, ambientes). Las IPs internas son sensibles: usa `--mask-ips` antes de compartir `docs/`.
 
@@ -41,6 +46,9 @@ python3 scripts/tdocs.py arch   docs/spec/architecture.json -o docs
 python3 scripts/tdocs.py net-init docs/00-grafo/graph.json -o docs/spec/network.json   # borrador: IPs, segmentos y hosts detectados
 python3 scripts/tdocs.py net    docs/spec/network.json     -o docs   # [--mask-ips] [--strict]
 python3 scripts/tdocs.py erd    docs/spec/erd.json          -o docs
+python3 scripts/tdocs.py volsql docs/spec/erd.json --dialect mssql -o docs     # SQL de solo lectura: total + muestra de 7 días
+python3 scripts/tdocs.py volapply resultados.csv docs/spec/erd.json
+python3 scripts/tdocs.py report -o docs        # documentacion.html: todo en pestañas / presentación
 python3 scripts/tdocs.py png -o docs && python3 scripts/tdocs.py index -o docs
 ```
 

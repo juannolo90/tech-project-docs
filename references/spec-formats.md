@@ -15,13 +15,14 @@ Significado: `azul` títulos y alta jerarquía · `azul_med` conexiones/subtítu
   "title": "…", "subtitle": "…",
   "groups": [{"id":"g1","label":"Backend · Node.js","icon":"nodejs","style":"dashed","parent":"otro"}],
   "nodes":  [{"id":"api","name":"API REST","role":"Express","icon":"express","group":"g1",
-              "col":2,"row":0,"x":300,"y":150,"tile":"dark"}],
+              "site":"AWS sa-east-1","ip":"10.20.4.22","col":2,"row":0,"x":300,"y":150,"tile":"dark"}],
   "edges":  [{"from":"web","to":"api","label":"REST","kind":"primary|internal|dashed|risk"}]
 }
 ```
 - `icon`: nombre devicon/svgl (`postgresql`, `redis`, `nodejs`, `docker`…), alias comunes (`mssql`, `pg`, `k8s`…) o genérico: `database server user users queue cache cloud api file clock browser gear box lock mail plug refresh chart`.
 - Layout automático: columna = profundidad según las flechas; **cada grupo de primer nivel ocupa su propia banda** (no se solapan). Sobrescribe con `col`/`row` o con `x`/`y` absolutos.
 - `tile: "dark"` para logos blancos/claros.
+- `site` / `ip` / `host` (opcionales) se muestran bajo el rol. Si faltan, `tdocs arch` los lista como **preguntas pendientes** (también una arista `primary`/`dashed`/`risk` sin `label`: «¿cómo se llama la integración?»).
 
 ## network.json  (paso 3b · `tdocs net`)
 ```json
@@ -57,7 +58,10 @@ Significado: `azul` títulos y alta jerarquía · `azul_med` conexiones/subtítu
 }
 ```
 - Las relaciones también se derivan de `fk`. `card` = `N:1` (por defecto), `1:1`, etc.
-- Crecimiento: `growth_pct_month` (compuesto) **o** `rows_per_month` (lineal).
+- Crecimiento: `growth_pct_month` (compuesto) **o** `rows_per_month` (lineal). Si no hay ninguno se **deriva** (y queda anotado en `derived`):
+  - `rows_per_day: 10` → tasa de negocio («se crean 10 proyectos al día») × 30, `source: "supuesto"`.
+  - `sample: {"days":7,"rows":420,"date_column":"created_at"}` → muestra medida de N días × 30/N (la rellena `tdocs volapply`).
+  - `per_parent: {"entity":"projects","ratio":8}` → filas hijas por cada padre × tasa del padre.
 - `source`: `medido` | `estimado` | `supuesto`. Sin `volume` → «sin medir».
 
 ## flows.json

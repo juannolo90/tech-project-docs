@@ -11,6 +11,31 @@ ROW_H, HEAD_H, VOL_H = 20, 30, 20
 WARN_BYTES = 10e9
 
 
+def normalize(spec):
+    """Deriva la tasa mensual desde lo que haya: tasa diaria (negocio), muestra de N días (medida) o razón hijo/padre."""
+    ents = {e["name"]: e for e in spec["entities"]}
+    for e in spec["entities"]:
+        v = e.get("volume")
+        if not v or v.get("rows_per_month") is not None or v.get("growth_pct_month") is not None:
+            continue
+        smp = v.get("sample") or {}
+        if v.get("rows_per_day") is not None:
+            v["rows_per_month"] = float(v["rows_per_day"]) * 30
+            v["derived"] = f"{human(v['rows_per_day'])}/día × 30"
+        elif smp.get("rows") is not None and smp.get("days"):
+            v["rows_per_month"] = float(smp["rows"]) / float(smp["days"]) * 30
+            v["derived"] = f"muestra {smp['days']} d ({human(smp['rows'])} filas) × 30/{smp['days']}"
+            v.setdefault("source", "medido")
+    for e in spec["entities"]:  # razón hijo/padre: «cada proyecto tiene ~8 tareas»
+        v = e.get("volume")
+        pp = (v or {}).get("per_parent")
+        if v and pp and v.get("rows_per_month") is None and ents.get(pp.get("entity"), {}).get("volume", {}).get("rows_per_month") is not None:
+            v["rows_per_month"] = ents[pp["entity"]]["volume"]["rows_per_month"] * float(pp["ratio"])
+            v["derived"] = f"{pp['entity']} × {pp['ratio']}"
+            v.setdefault("source", "supuesto")
+    return spec
+
+
 def project(vol, months):
     if not vol or vol.get("rows") is None:
         return None
@@ -30,6 +55,8 @@ def size_of(vol, rows):
 
 def vol_line(e):
     v = e.get("volume")
+    if v and v.get("rows") is None and v.get("rows_per_month") is not None:
+        return f"+{human(v['rows_per_month'])}/mes (total sin medir) [{v.get('source', 'supuesto')}]"
     if not v or v.get("rows") is None:
         return "volumen: sin medir"
     g = (f" · +{v['growth_pct_month']}%/mes" if v.get("growth_pct_month") is not None
@@ -278,7 +305,7 @@ def to_md(spec):
     L = [f"# {spec.get('title', 'Modelo de datos')}\n", spec.get("subtitle", ""), "\n## Volúmenes y crecimiento\n",
          "| Entidad | Hoy | +6 m | +12 m | +24 m | +36 m | Tamaño hoy | Tamaño +36 m | Fuente |", "|---|---|---|---|---|---|---|---|---|"]
     for n, r0, proj, s0, s36, v in table_rows(spec):
-        L.append(f"| {n} | {human(r0)} | " + " | ".join(human(p) for p in proj) + f" | {human_bytes(s0)} | {human_bytes(s36)} | {(v or {}).get('source', 'sin medir')} |")
+        L.append(f"| {n} | {human(r0)} | " + " | ".join(human(p) for p in proj) + f" | {human_bytes(s0)} | {human_bytes(s36)} | {(v or {}).get('source', 'sin medir')}{' · ' + v['derived'] if (v or {}).get('derived') else ''} |")
     L.append("\n> `sin medir` = falta dato real. Ver `references/volumenes.md` para las consultas de medición por motor.\n")
     L.append("## Diagrama (Mermaid)\n\n```mermaid\n" + to_mermaid(spec) + "```\n")
     return "\n".join(L)
@@ -291,12 +318,12 @@ def main(args):
     ap.add_argument("-o", "--out", default="docs")
     ap.add_argument("--theme")
     a = ap.parse_args(args)
-    spec, theme = read_json(a.spec), load_theme(a.theme)
+    spec, theme = normalize(read_json(a.spec)), load_theme(a.theme)
     base = f"{a.out}/03-modelo-datos"
     write(f"{base}/modelo-datos.svg", to_svg(spec, theme))
     d, W, H = to_drawio(spec, theme)
     d.save(f"{base}/modelo-datos.drawio", "Modelo de datos", W, H)
     write(f"{base}/modelo-datos.mmd", to_mermaid(spec))
     write(f"{base}/volumenes.md", to_md(spec))
-    miss = [e["name"] for e in spec["entities"] if not (e.get("volume") or {}).get("rows")]
+    miss = [e["name"] for e in spec["entities"] if not (e.get("volume") or {}).get("rows") and (e.get("volume") or {}).get("rows_per_month") is None]
     print(f"OK modelo de datos: {len(spec['entities'])} entidades → {base}/" + (f" · sin volumen medido: {', '.join(miss)}" if miss else ""))

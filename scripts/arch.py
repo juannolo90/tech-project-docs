@@ -7,6 +7,40 @@ COLW, ROWH, X0, Y0 = 190, 150, 110, 120
 TOP_PAD, SIDE_PAD, BOT_PAD = 60, 24, 24
 
 
+NO_SITE_ICONS = {"user", "users", "browser"}
+
+
+def extra_line(n):
+    """Segunda línea bajo el rol: sitio · IP/host (si se conocen)."""
+    bits = [n.get("site"), n.get("ip") or n.get("host")]
+    return " · ".join(str(b) for b in bits if b)
+
+
+def check(spec):
+    """Preguntas que el agente debe hacer al usuario cuando el spec no trae el dato (nunca se inventa)."""
+    q = []
+    nodes = {n["id"]: n for n in spec.get("nodes", [])}
+    for n in spec.get("nodes", []):
+        if n.get("icon", "box") in NO_SITE_ICONS:
+            continue
+        if not n.get("site"):
+            q.append(f"¿En qué sitio/servidor corre «{n['name']}»? (on-prem, AWS, Azure, SAP, SaaS u otro)")
+        if not (n.get("ip") or n.get("host")):
+            q.append(f"¿Cuál es la IP u hostname de «{n['name']}»? (si es un servicio gestionado, la URL/endpoint)")
+    for e in spec.get("edges", []):
+        a, b = nodes.get(e["from"]), nodes.get(e["to"])
+        if not a or not b:
+            continue
+        if not e.get("label") and e.get("kind", "internal") in ("primary", "dashed", "risk"):
+            q.append(f"¿Cómo se llama la integración/interfaz entre «{a['name']}» y «{b['name']}» (iFlow, API, job, cola, archivo) y qué protocolo/puerto usa?")
+    seen, out = set(), []
+    for x in q:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
+
 def layout(spec):
     """Rangos por dependencia -> columnas. Cada grupo de primer nivel ocupa su propia banda horizontal (sin solapes)."""
     nodes = {n["id"]: n for n in spec["nodes"]}
@@ -159,8 +193,12 @@ def to_svg(spec, theme, icons_dir=None):
         o.append(f'<image href="{icon_uri(n.get("icon", "box"), t, icons_dir)}" x="{cx-17}" y="{top+13}" width="34" height="34"/>')
         for i, ln in enumerate(wrap(n["name"], 20, 2)):
             o.append(svg_text(cx, top + 78 + i * 15, ln, 13, 600, t["azul"]))
+        base_y = top + 78 + 15 * len(wrap(n["name"], 20, 2)) + 3
         if n.get("role"):
-            o.append(svg_text(cx, top + 78 + 15 * len(wrap(n["name"], 20, 2)) + 3, n["role"], 10, 400, t["gris"], mono=True))
+            o.append(svg_text(cx, base_y, n["role"], 10, 400, t["gris"], mono=True))
+            base_y += 12
+        if extra_line(n):
+            o.append(svg_text(cx, base_y, extra_line(n), 10, 600, t["azul_med"], mono=True))
     ly = H + 8
     for i, (lab, kind) in enumerate([("flujo principal", "primary"), ("interno", "internal"), ("batch / externo", "dashed")]):
         col, dash, _ = edge_style(kind, t)
@@ -199,7 +237,8 @@ def to_drawio(spec, theme, icons_dir=None):
         tile[n["id"]] = d.vertex("", f"rounded=1;arcSize=20;html=1;fillColor={t['azul'] if dark else '#FFFFFF'};strokeColor={t['azul'] if dark else t['tile_border']};", cx - 30, top, 60, 60)
         d.vertex("", f"shape=image;html=1;image={icon_uri(n.get('icon', 'box'), t, icons_dir)};imageAspect=1;", cx - 17, top + 13, 34, 34)
         d.vertex(f'<b><font color="{t["azul"]}" style="font-size:13px">{esc(n["name"])}</font></b><br>'
-                 f'<font color="{t["gris"]}" style="font-size:10px" face="Courier New">{esc(n.get("role", ""))}</font>',
+                 f'<font color="{t["gris"]}" style="font-size:10px" face="Courier New">{esc(n.get("role", ""))}</font>'
+                 + (f'<br><font color="{t["azul_med"]}" style="font-size:10px" face="Courier New"><b>{esc(extra_line(n))}</b></font>' if extra_line(n) else ""),
                  "text;html=1;align=center;verticalAlign=top;whiteSpace=wrap;spacing=0;", cx - 66, top + 64, 132, 40)
     for e in spec.get("edges", []):
         if e["from"] not in nodes or e["to"] not in nodes:
@@ -243,3 +282,10 @@ def main(args):
     d.save(f"{a.out}/02-arquitectura/arquitectura.drawio", "Arquitectura", W, H)
     srcs = ", ".join(sorted(set(ICON_SOURCES.values())))
     print(f"OK arquitectura: {len(spec['nodes'])} componentes → {a.out}/02-arquitectura/ (iconos: {srcs})")
+    pend = check(spec)
+    md = ["# Pendientes por confirmar (arquitectura)\n"] + ([f"{i}. {x}" for i, x in enumerate(pend, 1)] or ["Sin pendientes."])
+    write(f"{a.out}/02-arquitectura/arquitectura-pendientes.md", "\n".join(md) + "\n")
+    if pend:
+        print(f"\nPENDIENTES POR CONFIRMAR ({len(pend)}): pregúntaselos al usuario antes de dar la arquitectura por terminada:")
+        for x in pend:
+            print("  ?", x)

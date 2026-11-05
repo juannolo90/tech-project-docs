@@ -2,12 +2,16 @@
 """tech-project-docs · CLI único.
 
   tdocs.py analyze <repo> -o docs          1) grafo del proyecto (+ IPs/hosts/segmentos detectados; --mask-ips)
+  tdocs.py graph   [graph.json] -o docs    1b) graph.html desde un grafo existente (--from graphify-out/graph.json); no relee el código
   tdocs.py flows   [spec] -o docs          2) flujos de operación
   tdocs.py arch    [spec] -o docs          3) arquitectura (.drawio + .svg)
   tdocs.py net-init [graph] -o spec        3b) borrador de red (sitios, segmentos, IPs) desde el grafo
   tdocs.py net     [spec] -o docs          3b) arquitectura de red HTML interactiva (+ .svg, pendientes)
   tdocs.py erd     [spec] -o docs          4) modelo ER con volúmenes
+  tdocs.py volsql  [erd] --dialect mssql|…  4b) SQL de solo lectura: total + muestra de 7 días por tabla
+  tdocs.py volapply resultados.csv [erd]   4b) aplica los resultados pegados al erd.json
   tdocs.py png     -o docs                 renderiza los .svg a .png (requiere playwright) para revisarlos
+  tdocs.py report  -o docs                 6) documentacion.html: todo en pestañas / modo presentación
   tdocs.py index   -o docs                 arma docs/README.md
 """
 import sys, pathlib
@@ -74,7 +78,7 @@ def main():
         except Exception:
             pass
     cmds = {"analyze": lambda a: __import__("analyze").main(a), "flows": lambda a: __import__("flows").main(a),
-            "arch": lambda a: __import__("arch").main(a), "net": lambda a: __import__("net").main(a),
+            "arch": lambda a: __import__("arch").main(a), "volsql": lambda a: __import__("volsql").main_sql(a), "volapply": lambda a: __import__("volsql").main_apply(a), "report": lambda a: __import__("report").main(a), "graph": lambda a: __import__("graph").main(a), "net": lambda a: __import__("net").main(a),
             "net-init": lambda a: __import__("net").main_init(a), "erd": lambda a: __import__("erd").main(a), "png": png, "index": index}
     if len(sys.argv) < 2 or sys.argv[1] not in cmds:
         print(__doc__)
