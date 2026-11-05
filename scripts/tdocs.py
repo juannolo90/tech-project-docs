@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """tech-project-docs · CLI único.
 
-  tdocs.py analyze <repo> -o docs          1) grafo del proyecto
+  tdocs.py analyze <repo> -o docs          1) grafo del proyecto (+ IPs/hosts/segmentos detectados; --mask-ips)
   tdocs.py flows   [spec] -o docs          2) flujos de operación
   tdocs.py arch    [spec] -o docs          3) arquitectura (.drawio + .svg)
+  tdocs.py net-init [graph] -o spec        3b) borrador de red (sitios, segmentos, IPs) desde el grafo
+  tdocs.py net     [spec] -o docs          3b) arquitectura de red HTML interactiva (+ .svg, pendientes)
   tdocs.py erd     [spec] -o docs          4) modelo ER con volúmenes
   tdocs.py png     -o docs                 renderiza los .svg a .png (requiere playwright) para revisarlos
   tdocs.py index   -o docs                 arma docs/README.md
@@ -72,7 +74,8 @@ def main():
         except Exception:
             pass
     cmds = {"analyze": lambda a: __import__("analyze").main(a), "flows": lambda a: __import__("flows").main(a),
-            "arch": lambda a: __import__("arch").main(a), "erd": lambda a: __import__("erd").main(a), "png": png, "index": index}
+            "arch": lambda a: __import__("arch").main(a), "net": lambda a: __import__("net").main(a),
+            "net-init": lambda a: __import__("net").main_init(a), "erd": lambda a: __import__("erd").main(a), "png": png, "index": index}
     if len(sys.argv) < 2 or sys.argv[1] not in cmds:
         print(__doc__)
         sys.exit(1)

@@ -1,0 +1,39 @@
+{
+  "title": "Acme Portal · Arquitectura de red",
+  "subtitle": "Ejemplo ficticio: SPA + API en AWS, base de datos en datacenter on-prem, ERP en SAP RISE y correo SaaS",
+  "env": "PRD",
+  "sites": [
+    {"id": "users", "label": "Usuarios Acme", "kind": "users", "detail": "oficinas · VPN corporativa"},
+    {"id": "onprem", "label": "Datacenter on-premise", "kind": "onprem", "detail": "Santiago"},
+    {"id": "aws", "label": "AWS · cuenta prod", "kind": "aws", "detail": "sa-east-1"},
+    {"id": "sap", "label": "SAP RISE", "kind": "sap", "detail": "gestionado por SAP"},
+    {"id": "internet", "label": "Internet / SaaS", "kind": "internet"}
+  ],
+  "segments": [
+    {"id": "vpc_net", "site": "aws", "label": "VPC Seguridad", "cidr": "10.20.0.0/22", "kind": "vpc"},
+    {"id": "sn_fw", "site": "aws", "parent": "vpc_net", "label": "Subred firewall", "cidr": "10.20.0.0/26", "kind": "subnet"},
+    {"id": "vpc_app", "site": "aws", "label": "VPC Producción", "cidr": "10.20.4.0/22", "kind": "vpc"},
+    {"id": "sn_app", "site": "aws", "parent": "vpc_app", "label": "Subred aplicación", "cidr": "10.20.4.0/24", "kind": "subnet"},
+    {"id": "vlan_db", "site": "onprem", "label": "VLAN bases de datos", "cidr": "10.50.8.0/24", "kind": "vlan"},
+    {"id": "sap_net", "site": "sap", "label": "Red SAP RISE", "cidr": "10.60.0.0/22", "kind": "vpc"}
+  ],
+  "nodes": [
+    {"id": "usr", "name": "Usuarios", "icon": "users", "site": "users", "kind": "user"},
+    {"id": "fw", "name": "Firewall perimetral", "role": "inspección L7", "icon": "lock", "site": "aws", "segment": "sn_fw", "ip": "10.20.0.10", "kind": "firewall"},
+    {"id": "tgw", "name": "Transit Gateway", "role": "enrutamiento entre VPC", "icon": "refresh", "site": "aws", "segment": "vpc_net", "ip": "10.20.0.1", "kind": "gateway"},
+    {"id": "web", "name": "SPA React", "role": "nginx + estáticos", "icon": "react", "site": "aws", "segment": "sn_app", "ip": "10.20.4.21", "port": 443},
+    {"id": "api", "name": "API REST", "role": "Node.js · Express", "icon": "express", "tile": "dark", "site": "aws", "segment": "sn_app", "ip": "10.20.4.22", "port": 3000},
+    {"id": "dx", "name": "Direct Connect", "role": "enlace a datacenter", "icon": "plug", "site": "onprem", "ip": "10.50.0.2", "kind": "vpn"},
+    {"id": "db", "name": "SQL Server", "role": "base de datos principal", "icon": "microsoftsqlserver", "site": "onprem", "segment": "vlan_db", "ip": "10.50.8.15", "port": 1433, "kind": "db"},
+    {"id": "s4", "name": "S/4HANA", "role": "ERP productivo", "icon": "database", "site": "sap", "segment": "sap_net", "ip": "10.60.0.10", "port": 443},
+    {"id": "smtp", "name": "Correo SMTP", "role": "relay SaaS", "icon": "mail", "site": "internet", "host": "smtp.proveedor.example", "port": 587, "kind": "saas"}
+  ],
+  "flows": [
+    {"id": "1", "label": "Usuarios → portal", "kind": "principal", "protocol": "HTTPS 443", "hops": ["usr", "fw", "web", "api"]},
+    {"id": "2", "label": "API → base de datos", "kind": "interno", "protocol": "TCP 1433 (TLS)", "hops": ["api", "tgw", "dx", "db"],
+     "note": "Regla de firewall on-prem: permite 10.20.4.22 → 10.50.8.15 TCP 1433."},
+    {"id": "3", "label": "Sincronización diaria con ERP", "kind": "batch", "protocol": "HTTPS 443", "hops": ["api", "tgw", "s4"]},
+    {"id": "4", "label": "Envío de correos", "kind": "externo", "protocol": "SMTP 587 (STARTTLS)", "hops": ["api", "fw", "smtp"]}
+  ],
+  "pending": []
+}

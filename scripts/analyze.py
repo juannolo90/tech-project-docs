@@ -84,6 +84,105 @@ DDL = re.compile(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[\[\"`]?(?:\w+[\]\"
 PRISMA_MODEL = re.compile(r"^model\s+(\w+)\s*\{(.*?)^\}", re.M | re.S)
 IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
+# ---- red: IPs, CIDR, hosts, puertos (solo de archivos de código/config; nunca .env reales) ----
+CONF_EXT = {".yml", ".yaml", ".tf", ".tfvars", ".conf", ".ini", ".properties", ".toml", ".cfg", ".config", ".sh", ".ps1", ".bicep"}
+CONF_NAMES = ("dockerfile", "appsettings", "local.settings", "ecosystem.config", "nginx", "haproxy", "web.config")
+NET_SKIP = {"package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "composer.lock", "tsconfig.json"}
+IP4 = re.compile(r"(?<![\w.^~=<>])(\d{1,3}(?:\.\d{1,3}){3})(?:/(\d{1,2}))?(?!\d|\.\d)")
+HOST_URL = re.compile(r"\b((?:jdbc:)?[a-z][a-z0-9+\-]*)://(?:[^/\s:@'\"`]+(?::[^@\s'\"`]*)?@)?((?:[A-Za-z0-9\-]+\.)*[A-Za-z0-9\-]+)(?::(\d{2,5}))?")
+LISTEN = [re.compile(r"\.listen\(\s*(?:process\.env\.\w+\s*(?:\|\||\?\?)\s*)?(\d{2,5})"), re.compile(r"\bPORT\b\s*(?:\|\||\?\?|=|:)\s*['\"]?(\d{2,5})"),
+          re.compile(r"^\s*EXPOSE\s+(\d{2,5})", re.M), re.compile(r"^\s*-\s*['\"]?(\d{2,5}):(\d{2,5})['\"]?\s*$", re.M)]
+NOISE_HOSTS = ("w3.org", "schemas.", "github.com", "githubusercontent.com", "npmjs.", "yarnpkg.com", "example.", "json-schema.org",
+               "nodejs.org", "python.org", "mozilla.org", "apache.org", "opensource.org", "creativecommons.org", "xmlsoap.org",
+               "openxmlformats.org", "docs.", "shields.io", "unpkg.com", "jsdelivr.net", "cloudflare.com")
+SITE_SUFFIX = [(".database.windows.net", "azure", "Azure SQL"), (".blob.core.windows.net", "azure", "Azure Storage"),
+               (".azurewebsites.net", "azure", "Azure App Service"), (".cloudapp.azure.com", "azure", "Azure VM"),
+               (".windows.net", "azure", ""), (".azure.com", "azure", ""), ("graph.microsoft.com", "azure", "Microsoft Graph"),
+               ("login.microsoftonline.com", "azure", "Entra ID"), (".rds.amazonaws.com", "aws", "AWS RDS"),
+               (".cache.amazonaws.com", "aws", "ElastiCache"), (".amazonaws.com", "aws", ""), (".cloudfront.net", "aws", "CloudFront"),
+               (".hana.ondemand.com", "sap", "SAP BTP"), (".s4hana.cloud.sap", "sap", "SAP S/4HANA Cloud"), (".cloud.sap", "sap", "SAP Cloud"),
+               (".googleapis.com", "gcp", ""), (".run.app", "gcp", "Cloud Run"), (".signavio.com", "saas", "SAP Signavio")]
+PORT_SERVICE = {1433: "SQL Server", 5432: "PostgreSQL", 3306: "MySQL", 27017: "MongoDB", 6379: "Redis", 5672: "RabbitMQ",
+                9092: "Kafka", 389: "LDAP", 636: "LDAPS", 25: "SMTP", 465: "SMTP", 587: "SMTP", 22: "SSH/SFTP", 30015: "SAP HANA",
+                443: "HTTPS", 80: "HTTP", 1521: "Oracle", 9200: "Elasticsearch"}
+
+
+BARE_CLOUD = re.compile(r"(?<![\w.-])((?:[a-z0-9-]+\.)+(?:database\.windows\.net|rds\.amazonaws\.com|hana\.ondemand\.com|azurewebsites\.net|cache\.amazonaws\.com|s4hana\.cloud\.sap))(?![\w-])", re.I)
+
+
+def ip_kind(ip):
+    a, b = int(ip.split(".")[0]), int(ip.split(".")[1])
+    if a == 127:
+        return "loopback"
+    if a == 10 or (a == 172 and 16 <= b <= 31) or (a == 192 and b == 168) or (a == 100 and 64 <= b <= 127):
+        return "private"
+    if a == 169 and b == 254:
+        return "link-local"
+    return "public"
+
+
+def mask_ip(ip):
+    p = ip.split(".")
+    return f"{p[0]}.{p[1]}.x.x"
+
+
+def scan_net(rel, txt, hints):
+    for m in IP4.finditer(txt):
+        ip, mask = m.group(1), m.group(2)
+        o = [int(x) for x in ip.split(".")]
+        if any(x > 255 for x in o) or ip in ("0.0.0.0", "255.255.255.255") or o[0] == 0:
+            continue
+        if mask is not None and int(mask) > 32:
+            continue
+        d = hints["ips"].setdefault(ip, {"ip": ip, "kind": ip_kind(ip), "files": set()})
+        d["files"].add(rel)
+        if mask is not None:
+            hints["cidrs"].setdefault(f"{ip}/{mask}", set()).add(rel)
+    for m in HOST_URL.finditer(txt):
+        scheme, host, port = m.group(1).lower(), m.group(2).lower(), m.group(3)
+        if scheme in ("file", "data", "chrome", "vscode") or IP4.fullmatch(host):
+            continue
+        if any(n in host for n in NOISE_HOSTS) or (scheme in ("http", "https") and "." not in host and host != "localhost"):
+            continue
+        d = hints["hosts"].setdefault((host, port or ""), {"host": host, "port": int(port) if port else None, "schemes": set(), "files": set()})
+        d["schemes"].add(scheme.replace("jdbc:", ""))
+        d["files"].add(rel)
+    for m in BARE_CLOUD.finditer(txt):  # hosts cloud sin esquema (p. ej. server=foo.database.windows.net)
+        host = m.group(1).lower()
+        hints["hosts"].setdefault((host, ""), {"host": host, "port": None, "schemes": set(), "files": set()})["files"].add(rel)
+    for rx in LISTEN:
+        for m in rx.finditer(txt):
+            hints["ports"].setdefault(int(m.group(m.lastindex)), set()).add(rel)
+
+
+def finish_net(hints, mask):
+    mk = mask_ip if mask else (lambda x: x)
+    mkc = (lambda c: mask_ip(c.split("/")[0]) + "/" + c.split("/")[1]) if mask else (lambda c: c)
+    ips = [{"ip": mk(v["ip"]), "kind": v["kind"], "files": sorted(v["files"])[:5]}
+           for v in sorted(hints["ips"].values(), key=lambda x: [int(o) for o in x["ip"].split(".")])]
+    seg = collections.defaultdict(list)
+    for v in hints["ips"].values():
+        if v["kind"] == "private":
+            seg[".".join(v["ip"].split(".")[:3]) + ".0/24"].append(mk(v["ip"]))
+    hosts = []
+    for v in sorted(hints["hosts"].values(), key=lambda x: x["host"]):
+        site, svc = None, None
+        for suf, st, sv in SITE_SUFFIX:
+            if v["host"].endswith(suf) or v["host"] == suf.lstrip("."):
+                site, svc = st, sv or None
+                break
+        if not svc and v["port"] in PORT_SERVICE:
+            svc = PORT_SERVICE[v["port"]]
+        hosts.append({"host": v["host"], "port": v["port"], "schemes": sorted(v["schemes"]), "site_hint": site,
+                      "service_hint": svc, "files": sorted(v["files"])[:5]})
+    withport = {h["host"] for h in hosts if h["port"]}
+    hosts = [h for h in hosts if h["port"] or h["host"] not in withport]
+    return {"ips": ips, "cidrs": [{"cidr": mkc(c), "files": sorted(f)[:3]} for c, f in sorted(hints["cidrs"].items())],
+            "segments_detected": [{"cidr": mkc(c), "ips": sorted(i)} for c, i in sorted(seg.items())],
+            "hosts": hosts, "listen_ports": [{"port": p, "files": sorted(f)[:3]} for p, f in sorted(hints["ports"].items())],
+            "masked": mask,
+            "note": "Una IP privada NO dice en qué sitio está (on-prem, AWS, Azure…): confirmar con el usuario."}
+
 
 def resolve_js(src_rel, spec, files):
     if not spec.startswith("."):
@@ -164,7 +263,7 @@ def parse_prisma(text):
     return out
 
 
-def analyze(root, out_dir):
+def analyze(root, out_dir, mask_ips=False):
     root = pathlib.Path(root).resolve()
     files = {}
     for p in walk(root):
@@ -174,11 +273,15 @@ def analyze(root, out_dir):
     routes, envs, tables, ddl_tables, comps = [], {}, collections.defaultdict(set), [], {}
     entry = set()
     manifests = {}
+    hints = {"ips": {}, "cidrs": {}, "hosts": {}, "ports": {}}
 
     for rel, p in files.items():
         ext = p.suffix.lower()
         name = p.name
-        txt = read(p) if (ext in CODE_EXT or name in SAFE_ENV or name in ("package.json", "requirements.txt", "pyproject.toml", "go.mod", "pom.xml", "docker-compose.yml", "docker-compose.yaml", "Dockerfile")) else ""
+        is_conf = ext in CONF_EXT or name.lower().startswith(CONF_NAMES) or (ext == ".json" and name.lower().startswith(("appsettings", "config", "settings", "local.settings")))
+        txt = read(p) if (ext in CODE_EXT or is_conf or name in SAFE_ENV or name in ("package.json", "requirements.txt", "pyproject.toml", "go.mod", "pom.xml", "docker-compose.yml", "docker-compose.yaml", "Dockerfile")) else ""
+        if txt and name not in NET_SKIP:
+            scan_net(rel, txt, hints)
         if name in SAFE_ENV:
             for line in txt.splitlines():
                 m = re.match(r"\s*([A-Z][A-Z0-9_]+)\s*=", line)
@@ -305,6 +408,7 @@ def analyze(root, out_dir):
         "external_deps": {k: sorted(v) for k, v in sorted(ext_deps.items())},
         "suggested_components": [{"category": a, "name": b, "icon": c} for a, b, c in suggested],
         "schema_ddl": list(all_tables.values()), "tables_referenced_in_code": inferred,
+        "network_hints": finish_net(hints, mask_ips),
     }
     graph["routes"] = [{"kind": k, "method": m, "path": p, "file": f} for k, m, p, f in graph["routes"]]
     out = pathlib.Path(out_dir) / "00-grafo"
@@ -344,8 +448,18 @@ def report(g, manifests):
     if g["tables_referenced_in_code"]:
         L.append("\n## Tablas referenciadas en consultas (esquema NO declarado: columnas por inferir)\n")
         L += [f"- `{t['name']}` ← {', '.join('`'+x+'`' for x in t['files'][:3])}" for t in g["tables_referenced_in_code"]]
-    L.append("\n> Generado por tech-project-docs. Las IPs/hosts y valores de `.env` no se leen ni se registran.")
-    return IP_RE.sub("x.x.x.x", "\n".join(L)) + "\n"
+    nh = g.get("network_hints") or {}
+    if nh.get("ips") or nh.get("hosts") or nh.get("listen_ports"):
+        L.append("\n## Red detectada (confirmar con el usuario: sitio, segmento y elementos de red)\n")
+        L += [f"- Segmento `{s['cidr']}`: " + ", ".join(f"`{i}`" for i in s["ips"][:8]) for s in nh.get("segments_detected", [])]
+        L += [f"- IP pública `{i['ip']}` ← `{i['files'][0]}`" for i in nh.get("ips", []) if i["kind"] == "public"][:15]
+        L += [f"- Host `{h['host']}{':' + str(h['port']) if h['port'] else ''}`" + (f" · {h['service_hint']}" if h["service_hint"] else "")
+              + (f" · sitio probable: **{h['site_hint']}**" if h["site_hint"] else " · sitio: ¿?") for h in nh.get("hosts", [])[:40]]
+        L += [f"- Puerto de escucha `{p['port']}` ← `{p['files'][0]}`" for p in nh.get("listen_ports", [])]
+        if not nh.get("masked"):
+            L.append("\n> ⚠ Este reporte puede contener IPs/hosts internos. No publiques `docs/` sin revisarlo (o regenera con `--mask-ips`).")
+    L.append("\n> Generado por tech-project-docs. Los valores de `.env` reales no se leen ni se registran.")
+    return "\n".join(L) + "\n"
 
 
 def main(args):
@@ -353,6 +467,7 @@ def main(args):
     ap = argparse.ArgumentParser(prog="tdocs analyze")
     ap.add_argument("repo")
     ap.add_argument("-o", "--out", default="docs")
+    ap.add_argument("--mask-ips", action="store_true", help="enmascara IPs (a.b.x.x) en graph.json y el reporte")
     a = ap.parse_args(args)
-    g = analyze(a.repo, a.out)
+    g = analyze(a.repo, a.out, a.mask_ips)
     print(f"OK grafo: {len(g['nodes'])} archivos, {len(g['edges'])} aristas, {len(g['entry_points'])} entradas → {a.out}/00-grafo/")

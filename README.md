@@ -11,9 +11,12 @@
 | 1 | Grafo del proyecto | `docs/00-grafo/graph.json`, `GRAPH_REPORT.md` |
 | 2 | Flujos de operación | `docs/01-flujos/*.svg`, `flujos.html`, `flujos.md` (Mermaid) |
 | 3 | Arquitectura con iconos | `docs/02-arquitectura/arquitectura.drawio` + `.svg` |
+| 3b | **Red y despliegue** (sitios on-prem/AWS/Azure/SAP, segmentos/CIDR, IPs, firewalls/VPN, flujos numerables) | `docs/02-arquitectura/red.html` (interactivo), `red.svg`, `red-pendientes.md` |
 | 4 | Modelo ER + volúmenes | `docs/03-modelo-datos/modelo-datos.drawio`, `.svg`, `volumenes.md`, `.mmd` |
 
 Ejemplo (datos ficticios): ver `examples/`.
+
+**Red y despliegue:** el analizador detecta IPs, CIDR, hosts cloud y puertos en código/config (nunca `.env` reales) y la skill **pregunta** lo que no puede saber (sitio de cada IP, segmentos, firewalls/VPN, ambientes). Las IPs internas son sensibles: usa `--mask-ips` antes de compartir `docs/`.
 
 ## Instalación
 
@@ -35,6 +38,8 @@ El agente ejecuta el flujo de `SKILL.md`: analiza el repo, lee el código y escr
 python3 scripts/tdocs.py analyze ./mi-proyecto -o docs
 python3 scripts/tdocs.py flows  docs/spec/flows.json        -o docs
 python3 scripts/tdocs.py arch   docs/spec/architecture.json -o docs
+python3 scripts/tdocs.py net-init docs/00-grafo/graph.json -o docs/spec/network.json   # borrador: IPs, segmentos y hosts detectados
+python3 scripts/tdocs.py net    docs/spec/network.json     -o docs   # [--mask-ips] [--strict]
 python3 scripts/tdocs.py erd    docs/spec/erd.json          -o docs
 python3 scripts/tdocs.py png -o docs && python3 scripts/tdocs.py index -o docs
 ```

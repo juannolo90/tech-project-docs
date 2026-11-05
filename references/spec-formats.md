@@ -1,6 +1,6 @@
 # Formatos de spec (JSON)
 
-Los tres specs viven en `docs/spec/`. Ejemplos completos en `examples/`.
+Los cuatro specs viven en `docs/spec/`. Ejemplos completos en `examples/`.
 
 ## Tema (opcional) — `--theme tema.json`
 ```json
@@ -22,6 +22,25 @@ Significado: `azul` títulos y alta jerarquía · `azul_med` conexiones/subtítu
 - `icon`: nombre devicon/svgl (`postgresql`, `redis`, `nodejs`, `docker`…), alias comunes (`mssql`, `pg`, `k8s`…) o genérico: `database server user users queue cache cloud api file clock browser gear box lock mail plug refresh chart`.
 - Layout automático: columna = profundidad según las flechas; **cada grupo de primer nivel ocupa su propia banda** (no se solapan). Sobrescribe con `col`/`row` o con `x`/`y` absolutos.
 - `tile: "dark"` para logos blancos/claros.
+
+## network.json  (paso 3b · `tdocs net`)
+```json
+{
+  "title":"…","subtitle":"…","env":"PRD",
+  "sites":[{"id":"aws","label":"AWS · cuenta prod","kind":"aws|azure|gcp|sap|onprem|saas|internet|users|unknown","detail":"sa-east-1"}],
+  "segments":[{"id":"vpc","site":"aws","parent":"otro_segmento","label":"VPC Prod","cidr":"10.20.4.0/22","kind":"vpc|vnet|subnet|vlan|dmz"}],
+  "nodes":[{"id":"api","name":"API REST","role":"Express","icon":"express","site":"aws","segment":"vpc",
+            "ip":"10.20.4.22","host":"api.interno","port":3000,"kind":"app|db|user|saas|external|firewall|gateway|vpn|lb|proxy|router|dns"}],
+  "flows":[{"id":"1","label":"Usuarios → portal","kind":"principal|interno|batch|externo|referencia|riesgo","protocol":"HTTPS 443",
+            "hops":["usr","fw",{"id":"api","label":"TCP 3000"}],"note":"regla de firewall…"}],
+  "pending":["pregunta abierta libre"]
+}
+```
+- Un nodo con `kind` de red (`firewall`, `gateway`, `vpn`, `lb`, `proxy`, `router`, `dns`) se dibuja con borde rojo punteado.
+- `hops` = recorrido ordenado de nodos; cada par consecutivo es un salto. Un hop puede ser `{"id","label"}` para rotular el puerto de ese salto.
+- Sin `site`/`ip`/`segment`/`protocol`, o un flujo que cruza de sitio sin elemento de red, se reporta como **pendiente por confirmar** (no se inventa).
+- `--mask-ips` deja `10.20.x.x` en todas las salidas; sin la bandera, `red.html` incluye un botón «Ocultar IPs».
+- Ejemplo ficticio completo: `examples/network.json`.
 
 ## erd.json
 ```json
