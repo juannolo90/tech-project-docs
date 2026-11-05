@@ -2,7 +2,7 @@
 
   tdocs.py report -o docs [--title "…"] [--mask-ips]
 
-Pestañas: Resumen · Grafo · Flujos · Arquitectura · Red · Datos y volúmenes · Pendientes.
+Pestañas: Resumen · Grafo · Flujos · Componentes · Arquitectura (red, editable) · Datos y volúmenes · Pendientes.
 Las secciones que no se generaron aparecen deshabilitadas (no se inventa contenido). Navegación: clic, ← → y tecla P = presentación.
 """
 import base64, html as H, json, pathlib, re
@@ -83,7 +83,7 @@ def sec_resumen(d, title):
             L.append(f"<p>Lenguajes: {esc(langs)}</p>")
         if j.get("entry_points"):
             L.append("<h3>Puntos de entrada</h3><ul>" + "".join(f"<li><code>{esc(e)}</code></li>" for e in j["entry_points"][:12]) + "</ul>")
-    L.append("<h3>Contenido</h3><ul>" + "".join(f"<li>{n}</li>" for n in ("Grafo del código", "Flujos de operación", "Arquitectura", "Red y despliegue", "Modelo de datos y volúmenes", "Pendientes por confirmar")) + "</ul>")
+    L.append("<h3>Contenido</h3><ul>" + "".join(f"<li>{n}</li>" for n in ("Grafo del código", "Flujos de operación", "Componentes", "Arquitectura de red y despliegue", "Modelo de datos y volúmenes", "Pendientes por confirmar")) + "</ul>")
     L.append('<p class="hint">Usa las pestañas, las flechas ← → o la tecla <b>P</b> para presentar como diapositivas.</p>')
     return "".join(L)
 
@@ -112,9 +112,9 @@ def build(out_dir, title, mask):
     else:
         tabs.append(("flujos", "Flujos", None))
     ar = d / "02-arquitectura" / "arquitectura.svg"
-    tabs.append(("arq", "Arquitectura", img(ar, "Arquitectura") if ar.exists() else None))
-    rd = d / "02-arquitectura" / "red.html"
-    tabs.append(("red", "Red", iframe(rd, "Red y despliegue") if rd.exists() else None))
+    tabs.append(("arq", "Componentes", img(ar, "Componentes") if ar.exists() else None))
+    rd = d / "02-arquitectura" / "arquitectura.html"
+    tabs.append(("red", "Arquitectura", iframe(rd, "Arquitectura de red") if rd.exists() else None))
     mo = d / "03-modelo-datos" / "modelo-datos.svg"
     if mo.exists():
         vm = d / "03-modelo-datos" / "volumenes.md"
@@ -125,7 +125,7 @@ def build(out_dir, title, mask):
     else:
         tabs.append(("datos", "Datos y volúmenes", None))
     pend = []
-    for f, lab in (("02-arquitectura/arquitectura-pendientes.md", "Arquitectura"), ("02-arquitectura/red-pendientes.md", "Red"),
+    for f, lab in (("02-arquitectura/arquitectura-pendientes.md", "Arquitectura"), ("02-arquitectura/arquitectura-red-pendientes.md", "Arquitectura de red"),
                    ("03-modelo-datos/volumenes-pendientes.md", "Volúmenes")):
         p = d / f
         if p.exists():

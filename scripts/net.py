@@ -1,4 +1,4 @@
-"""Paso 3b · Red y despliegue: network.json -> red.html (interactivo, con flujos numerables) + red.svg + red-pendientes.md.
+"""Paso 3b · Arquitectura de red y despliegue: network.json -> arquitectura.html (interactivo, editable, flujos animados) + arquitectura-red.svg + arquitectura-red-pendientes.md.
 
 Muestra DÓNDE vive cada componente (sitio: on-prem / AWS / Azure / SAP / SaaS / Internet), en qué SEGMENTO (VPC, VNet, subred,
 VLAN, CIDR), con qué IP/puerto, y por qué elementos de red pasa cada flujo (firewall, gateway, VPN, balanceador, proxy…).
@@ -6,7 +6,7 @@ Lo que falta se lista como «pendiente por confirmar» (el agente debe PREGUNTAR
 
 Subcomandos (vía tdocs.py):  net-init  (borrador desde graph.json)  ·  net  (renderiza)
 """
-import collections, json, pathlib, re
+import collections, copy, json, pathlib, re
 from common import load_theme, read_json, write, esc, wrap, icon_uri, ICON_SOURCES, MONO, SANS
 
 IP4 = re.compile(r"(?<![\w.])((?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})(?![\w]|\.\d)")
@@ -80,11 +80,13 @@ def check(spec):
             errs.append(f"flujo {f['id']}: necesita al menos 2 nodos en hops")
         if not f.get("protocol") and not any(hop_label(h) for h in f.get("hops", [])):
             pend.append(f"Flujo {f['id']} «{f.get('label', '')}»: ¿qué protocolo y puerto usa?")
-        for a, b in zip(ids, ids[1:]):
+        for j, (a, b) in enumerate(zip(ids, ids[1:]), 1):
             na, nb = nodes[a], nodes[b]
-            if na.get("site") != nb.get("site") and na.get("kind") not in NET_KINDS and nb.get("kind") not in NET_KINDS:
+            via = ((f.get("via") or {}).get(str(j)) or "").strip()
+            if na.get("site") != nb.get("site") and na.get("kind") not in NET_KINDS and nb.get("kind") not in NET_KINDS and not via:
                 pend.append(f"Flujo {f['id']}: «{na['name']}» → «{nb['name']}» cruza de sitio; ¿hay firewall, VPN/Direct Connect/ExpressRoute, "
                             f"proxy o balanceador en medio? ¿qué reglas lo permiten?")
+    pend += [q["text"] for q in spec.get("questions", []) if not (q.get("answer") or "").strip()]
     pend += [p for p in spec.get("pending", [])]
     seen, out = set(), []
     for p in pend:
@@ -172,6 +174,8 @@ CSS = f"""
 .net.sel .node{{opacity:.35}} .net.sel .node.on{{opacity:1}}
 .net .flow{{cursor:pointer}} .net .badge{{cursor:pointer}}
 .net .unk{{fill:#EF4444;font-style:italic}}
+.net .pkt{{fill:none;stroke:#fff;stroke-linecap:round;stroke-width:3.4;stroke-dasharray:.1 15;animation:flow 1.1s linear infinite;opacity:.7}}
+@keyframes flow{{to{{stroke-dashoffset:-15.1}}}} @media (prefers-reduced-motion:reduce){{.net .pkt{{animation:none}}}}
 .net text{{paint-order:stroke;stroke:var(--panel);stroke-width:3.5px;stroke-linejoin:round}} .net .badge text{{stroke:none}}
 """
 NETDASH = ' stroke-dasharray="4 3"'
@@ -285,6 +289,7 @@ def render_svg(spec, theme, icons_dir, mask, standalone):
             pts = route(nodes[a], nodes[b], idx, tops_x, ch_base)
             ps = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
             o.append(f'<polyline points="{ps}" stroke="{col}" stroke-width="1.8" stroke-linejoin="round"{d} marker-end="url(#m-{f.get("kind", "interno")})" fill="none"/>')
+            o.append(f'<polyline class="pkt" points="{ps}"/>')
             bx, by = point_at(pts, 0.3 + (idx % 4) * 0.13)
             badges.append((bx, by, col))
         o.append("</g>")
@@ -321,119 +326,105 @@ def render_svg(spec, theme, icons_dir, mask, standalone):
     return "".join(o)
 
 
-# ------------------------------------------------------------------ HTML
+# ------------------------------------------------------------------ HTML (se dibuja en el navegador desde el JSON embebido)
 PAGE_CSS = """
 :root{--ink:#1B3A5C;--muted:#64748B;--bg:#F8FAFC;--panel:#FFFFFF;--tile:#FFFFFF;--tileb:#CBD5E1;--line:#E2E8F0;--accent:#E8811A}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--ink:#E6EDF6;--muted:#9AA9BC;--bg:#0F1722;--panel:#16202E;--tile:#FFFFFF;--tileb:#475569;--line:#243247}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Inter,Helvetica,Arial,sans-serif}
-header{padding:20px 24px 8px}h1{margin:0;font-size:22px}header p{margin:2px 0 0;color:var(--muted);font-size:13px}
-.bar{display:flex;flex-wrap:wrap;gap:8px;padding:8px 24px 12px;align-items:center}
-.chip{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
-.chip:hover{border-color:var(--accent)}.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+header{padding:16px 24px 4px}h1{margin:0;font-size:22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}header p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.tabs{display:flex;gap:4px;padding:8px 24px 0;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:none;color:var(--muted);font:inherit;padding:8px 14px;border-bottom:3px solid transparent;cursor:pointer}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tabv{display:none}.tabv.on{display:block}
+.bar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 24px;align-items:center}
+.chip,.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
+.btn{border-radius:8px;margin:6px 0}.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.chip:hover,.btn:hover{border-color:var(--accent)}.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block}.sp{flex:1}
+#player{display:none;gap:10px;align-items:center;padding:0 24px 8px;flex-wrap:wrap}#cap{color:var(--muted);font-size:12.5px}
 .canvas{overflow:auto;margin:0 24px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
 .canvas svg{display:block;width:100%;min-width:1100px;height:auto}
 main{padding:16px 24px 40px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
 section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-h2{margin:0 0 8px;font-size:14px}table{border-collapse:collapse;width:100%;font-size:12.5px}
+h2{margin:0 0 8px;font-size:14px}h3{margin:8px 0 4px;font-size:13px}table{border-collapse:collapse;width:100%;font-size:12.5px}
 th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600}
-code,.mono{font-family:'JetBrains Mono',Consolas,monospace;font-size:12px}.q li{margin:4px 0}.q{padding-left:18px;margin:0}
-.warn{border-color:#EF4444}.hint{color:var(--muted);font-size:12px}
-.flowdetail{display:none}.flowdetail.on{display:block}
+.mono{font-family:'JetBrains Mono',Consolas,monospace;font-size:12px}.q li{margin:4px 0}.q{padding-left:18px;margin:0}
+.warn{border-color:#EF4444}.hint{color:var(--muted);font-size:12px}.flowdetail{display:none}.flowdetail.on{display:block}
+/* animación de flujos */
+.net{font-family:Inter,Helvetica,Arial,sans-serif}.net .ink{fill:var(--ink)}.net .muted{fill:var(--muted)}.net .mono{font-family:'JetBrains Mono',Consolas,monospace}
+.net .unk{fill:#EF4444;font-style:italic}.net text{paint-order:stroke;stroke:var(--panel);stroke-width:3.5px;stroke-linejoin:round}.net .badge text{stroke:none;fill:#fff;font-weight:700}
+.net .leg,.net .badge{cursor:pointer;transition:opacity .2s}.net .pkt{fill:none;stroke-linecap:round;stroke-width:3.4;stroke-dasharray:.1 15;animation:flow 1.1s linear infinite;opacity:.7}
+@keyframes flow{to{stroke-dashoffset:-15.1}}
+.net.sel .leg,.net.sel .badge{opacity:.08}.net.sel .leg.on,.net.sel .badge.on{opacity:1}.net.sel .leg.on .main{stroke-width:3}.net.sel .leg.on .pkt{opacity:.95}
+.net .leg.act .main{stroke-width:4.2;filter:drop-shadow(0 0 4px currentColor)}.net.sel .node{opacity:.3;transition:opacity .2s}.net.sel .node.on{opacity:1}
+.net .pk{stroke:#fff;stroke-width:2.2;opacity:0;pointer-events:none;filter:drop-shadow(0 0 5px rgba(0,0,0,.45))}
+@media (prefers-reduced-motion:reduce){.net .pkt{animation:none}}
+/* formulario */
+#form,#view-help{padding:8px 24px 60px;max-width:1500px}#form h2{margin:22px 0 6px;font-size:15px}
+.ft input,.ft select,.fcard input,.qa textarea{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:6px;padding:5px 7px;font:inherit;font-size:12.5px}
+.ft td{padding:3px 4px}.ft .num{width:80px}input.miss{border-color:#EF4444;background:rgba(239,68,68,.08)}
+.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px}.x:hover{color:#EF4444}
+.fcard{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0;background:var(--panel)}
+.frow{display:grid;grid-template-columns:90px 1.2fr 1.2fr 1fr;gap:8px;align-items:center;margin:4px 0}.frow.hop{grid-template-columns:1.4fr 1fr 1.4fr}
+.qa{margin:8px 0}.qa label{display:block;font-weight:600;margin-bottom:3px}.qa textarea{resize:vertical}
+#savebar{position:sticky;bottom:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 24px;background:var(--panel);border-top:1px solid var(--line)}
+#status{color:var(--muted);font-size:12.5px;flex:1}#draftbar{display:none;gap:10px;align-items:center;padding:8px 24px;background:rgba(232,129,26,.12);border-bottom:1px solid var(--accent)}
 """
-JS = """
-const svg=document.querySelector('svg.net');let cur=null;
-function sel(id){cur=(cur===id)?null:id;
- svg.classList.toggle('sel',!!cur);
- svg.querySelectorAll('.flow,.badge').forEach(e=>e.classList.toggle('on',e.dataset.f===cur));
- svg.querySelectorAll('.node').forEach(e=>e.classList.toggle('on',!!cur&&(' '+e.dataset.flows+' ').includes(' '+cur+' ')));
- document.querySelectorAll('.chip[data-f]').forEach(e=>e.classList.toggle('on',e.dataset.f===cur));
- document.querySelectorAll('.flowdetail').forEach(e=>e.classList.toggle('on',e.dataset.f===cur));
- document.getElementById('all').style.display=cur?'none':'block';}
-document.querySelectorAll('.chip[data-f]').forEach(e=>e.onclick=()=>sel(e.dataset.f));
-svg.querySelectorAll('.flow,.badge').forEach(e=>e.onclick=()=>sel(e.dataset.f));
-const mk=document.getElementById('mask');if(mk){let m=false;mk.onclick=()=>{m=!m;mk.classList.toggle('on',m);
- document.querySelectorAll('.ip').forEach(e=>e.textContent=m?e.dataset.m:e.dataset.f);
- document.querySelectorAll('td.ipc').forEach(e=>e.textContent=m?e.dataset.m:e.dataset.f);}}
-"""
+CFG_KINDS = ["app", "db", "user", "saas", "external", "firewall", "gateway", "vpn", "lb", "proxy", "router", "dns"]
+GENERIC_QUESTIONS = [
+    "¿Qué ambiente representa este diagrama (DEV, QA, PRD)? ¿Las IPs cambian entre ambientes?",
+    "¿Desde dónde acceden los usuarios (oficina, VPN corporativa, Internet) y por qué dirección o URL?",
+    "¿Hay un balanceador, WAF, proxy o API gateway delante de la aplicación? ¿Cuál es su nombre/IP?",
+    "¿Cómo se resuelven los nombres (DNS interno, público, hosts)? ¿Hay reglas de firewall relevantes que documentar?",
+]
+SHELL = """<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Arquitectura</title><style>%(css)s</style></head><body>
+<header><h1><span id="title"></span><span class="chip" id="env" style="cursor:default;display:none"></span></h1><p id="sub"></p></header>
+<div id="draftbar"><span>Hay un borrador sin guardar en el archivo.</span><button class="btn" id="restore">Restaurar</button><button class="btn" id="discard">Descartar</button></div>
+<div class="tabs"><button data-v="diagram" class="on">Diagrama</button><button data-v="form" id="tabform">Completar datos</button></div>
+<div class="tabv on" data-v="diagram">
+ <div class="bar"><button class="chip on" id="allchip">Todos los flujos</button><span id="chips" style="display:contents"></span><span class="sp"></span><button class="chip" id="mask" title="Oculta los 2 últimos octetos de las IPs (para capturas)">Ocultar IPs</button></div>
+ <div id="player"><button class="btn" id="pause">⏸ Pausar</button><button class="btn" id="replay">↻ Repetir</button><span id="cap"></span></div>
+ <div class="canvas"><div id="svgbox"></div></div>
+ <main>
+  <section style="grid-column:1/-1"><h2>Flujos</h2><div id="all"></div><div id="details"></div></section>
+  <section><h2>Inventario por sitio y segmento</h2><div id="inv"></div></section>
+  <section><h2>Leyenda</h2><div id="legend">%(legend)s</div></section>
+  <section class="warn" id="pendsec" style="display:none"><div id="pend"></div></section>
+ </main>
+</div>
+<div class="tabv" data-v="form"><div id="form"></div></div>
+<div id="savebar"><button class="btn pri" id="savehtml">💾 Guardar en el HTML</button><button class="btn" id="savejson">⬇ Exportar network.json</button><span id="status">Los cambios se ven al instante. «Guardar en el HTML» deja los datos dentro de este archivo.</span></div>
+<script id="spec" type="application/json">%(spec)s</script>
+<script id="icons" type="application/json">%(icons)s</script>
+<script>window.CFG=%(cfg)s;</script>
+<script>%(app)s</script></body></html>"""
 
 
-def where(n, sites, segs):
-    s = sites.get(n.get("site"), {})
-    g = segs.get(n.get("segment"), {})
-    return " › ".join(x for x in (s.get("label"), g.get("label")) if x)
+def _js_json(obj):
+    return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
 
 
-def ipcell(val, mask):
-    if not val:
-        return '<td class="mono"><span style="color:#EF4444">por confirmar</span></td>'
-    if mask:
-        return f'<td class="mono">{esc(mask_text(val))}</td>'
-    return f'<td class="mono ipc" data-f="{esc(val)}" data-m="{esc(mask_text(val))}">{esc(val)}</td>'
+def legend_html():
+    rows = []
+    for k, (c, d) in FLOW_STYLE.items():
+        rows.append(f'<tr><td style="width:60px"><svg width="46" height="8"><line x1="0" y1="4" x2="46" y2="4" stroke="{c}" stroke-width="2.4" stroke-dasharray="{d}"/></svg></td><td>{FLOW_LABEL[k]}</td></tr>')
+    rows.append('<tr><td><span style="display:inline-block;border:2px dashed #EF4444;width:18px;height:18px;border-radius:50%"></span></td><td>elemento de red (firewall, VPN, gateway, balanceador, proxy)</td></tr>')
+    rows.append('<tr><td><span style="display:inline-block;background:#fff;border:1px solid #94A3B8;width:8px;height:8px;border-radius:50%"></span></td><td>puntos blancos en movimiento = sentido del flujo (al elegir un flujo, un paquete recorre cada salto)</td></tr>')
+    return "<table>" + "".join(rows) + "</table>"
 
 
 def render_html(spec, theme, icons_dir, mask, pend):
-    nodes = {n["id"]: n for n in spec.get("nodes", [])}
-    sites = {s["id"]: s for s in spec.get("sites", [])}
-    segs = {s["id"]: s for s in spec.get("segments", [])}
-    flows = spec.get("flows", [])
-    svg = render_svg(spec, theme, icons_dir, mask, False)
-    h = [f'<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-         f'<title>{esc(spec.get("title", "Arquitectura de red"))}</title><style>{PAGE_CSS}</style></head><body>']
-    env = f' <span class="chip" style="cursor:default">{esc(spec["env"])}</span>' if spec.get("env") else ""
-    h.append(f'<header><h1>{esc(spec.get("title", "Arquitectura de red"))}{env}</h1><p>{esc(spec.get("subtitle", ""))}</p></header>')
-    h.append('<div class="bar"><button class="chip on" onclick="sel(cur)">Todos los flujos</button>')
-    for f in flows:
-        col = FLOW_STYLE.get(f.get("kind", "interno"), FLOW_STYLE["interno"])[0]
-        h.append(f'<button class="chip" data-f="{esc(f["id"])}"><span class="dot" style="background:{col}"></span>{esc(f["id"])} · {esc(f.get("label", ""))}</button>')
-    h.append('<span class="sp"></span>')
-    if not mask:
-        h.append('<button class="chip" id="mask" title="Oculta los 2 últimos octetos de las IPs (para capturas)">Ocultar IPs</button>')
-    h.append("</div>")
-    h.append(f'<div class="canvas">{svg}</div><main>')
-    # detalle por flujo + vista general
-    h.append('<section style="grid-column:1/-1"><h2>Flujos</h2><div id="all"><table><tr><th>#</th><th>Flujo</th><th>Tipo</th><th>Protocolo</th><th>Recorrido</th></tr>')
-    for f in flows:
-        ids = [hop_id(x) for x in f.get("hops", []) if hop_id(x) in nodes]
-        h.append(f'<tr><td><b>{esc(f["id"])}</b></td><td>{esc(f.get("label", ""))}</td><td>{esc(FLOW_LABEL.get(f.get("kind", "interno"), ""))}</td>'
-                 f'<td class="mono">{esc(f.get("protocol", "—"))}</td><td>{" → ".join(esc(nodes[i]["name"]) for i in ids)}</td></tr>')
-    h.append('</table><p class="hint">Haz clic en un flujo (chip, línea o número) para resaltarlo y ver sus saltos de red.</p></div>')
-    for f in flows:
-        ids = [hop_id(x) for x in f.get("hops", [])]
-        if any(i not in nodes for i in ids):
-            continue
-        h.append(f'<div class="flowdetail" data-f="{esc(f["id"])}"><table><tr><th>Salto</th><th>Origen</th><th>IP origen</th><th>Destino</th><th>IP destino</th><th>Puerto / protocolo</th></tr>')
-        for j, (a, b) in enumerate(zip(ids, ids[1:]), 1):
-            na, nb = nodes[a], nodes[b]
-            lab = hop_label(f["hops"][j]) or f.get("protocol", "")
-            h.append(f'<tr><td>{esc(f["id"])}.{j}</td><td>{esc(na["name"])}<br><span class="hint">{esc(where(na, sites, segs))}</span></td>{ipcell(na.get("ip") or na.get("host"), mask)}'
-                     f'<td>{esc(nb["name"])}<br><span class="hint">{esc(where(nb, sites, segs))}</span></td>{ipcell(nb.get("ip") or nb.get("host"), mask)}<td class="mono">{esc(lab) or "—"}</td></tr>')
-        h.append("</table>")
-        if f.get("note"):
-            h.append(f'<p class="hint">{esc(f["note"])}</p>')
-        h.append("</div>")
-    h.append("</section>")
-    # inventario por segmento
-    h.append('<section><h2>Inventario por sitio y segmento</h2><table><tr><th>Sitio › Segmento</th><th>CIDR</th><th>Componentes</th></tr>')
-    groups = collections.OrderedDict()
-    for n in spec.get("nodes", []):
-        groups.setdefault((n.get("site"), n.get("segment")), []).append(n)
-    for (si, sg), ns in groups.items():
-        cidr = segs.get(sg, {}).get("cidr", "")
-        h.append(f'<tr><td>{esc(where(ns[0], sites, segs) or "— sin sitio —")}</td>{ipcell(cidr, mask) if cidr else "<td></td>"}'
-                 f'<td>{", ".join(esc(n["name"]) for n in ns)}</td></tr>')
-    h.append("</table></section>")
-    # leyenda
-    h.append('<section><h2>Leyenda</h2><table>')
-    for k, (c, d) in FLOW_STYLE.items():
-        h.append(f'<tr><td style="width:60px"><svg width="46" height="8"><line x1="0" y1="4" x2="46" y2="4" stroke="{c}" stroke-width="2.4" stroke-dasharray="{d}"/></svg></td><td>{FLOW_LABEL[k]}</td></tr>')
-    h.append('<tr><td><span class="dot" style="border:2px dashed #EF4444;width:18px;height:18px;border-radius:50%"></span></td><td>elemento de red (firewall, VPN, gateway, balanceador, proxy)</td></tr>')
-    h.append("</table></section>")
-    if pend:
-        h.append('<section class="warn"><h2>Pendientes por confirmar</h2><ol class="q">' + "".join(f"<li>{esc(mask_text(p) if mask else p)}</li>" for p in pend)
-                 + '</ol><p class="hint">Estos datos no se pudieron deducir del código. Confírmalos y actualiza <code>network.json</code>.</p></section>')
-    h.append(f"</main><script>{JS}</script></body></html>")
-    out = "".join(h)
+    """HTML autocontenido: el diagrama se dibuja en el navegador desde #spec, de modo que los datos que el usuario complete
+    (sitio, IP, segmento…) se vean al instante y puedan guardarse DENTRO del mismo archivo."""
+    names = {"box"} | {n.get("icon", "box") for n in spec.get("nodes", [])} | {SITE_ICON.get(s.get("kind", "unknown"), "box") for s in spec.get("sites", [])} | set(SITE_ICON.values())
+    icons = {nm: icon_uri(nm, theme, icons_dir) for nm in sorted(names)}
+    data = copy.deepcopy(spec)
+    data.setdefault("questions", [{"id": f"g{i}", "text": t, "answer": ""} for i, t in enumerate(GENERIC_QUESTIONS, 1)])
+    cfg = {"CELLW": CELLW, "CELLH": CELLH, "PAD": PAD, "GAP": GAP, "SITE_COLOR": SITE_COLOR, "SITE_DASH": sorted(SITE_DASH), "SITE_ICON": SITE_ICON,
+           "NET_KINDS": sorted(NET_KINDS), "FLOW_STYLE": {k: list(v) for k, v in FLOW_STYLE.items()}, "FLOW_LABEL": FLOW_LABEL, "KINDS": CFG_KINDS,
+           "SITE_KINDS": list(SITE_COLOR), "SEG_KINDS": ["vpc", "vnet", "subnet", "vlan", "dmz"], "locked": bool(mask)}
+    app = (pathlib.Path(__file__).resolve().parent / "net_app.js").read_text(encoding="utf-8")
+    out = SHELL % {"css": PAGE_CSS, "legend": legend_html(), "spec": _js_json(data), "icons": _js_json(icons), "cfg": _js_json(cfg), "app": app}
     return mask_text(out) if mask else out
 
 
@@ -510,6 +501,7 @@ def main(args):
     ap.add_argument("--strict", action="store_true", help="falla (exit 2) si hay pendientes por confirmar")
     a = ap.parse_args(args)
     spec, theme = read_json(a.spec), load_theme(a.theme)
+    spec.setdefault("questions", [{"id": f"g{i}", "text": t, "answer": ""} for i, t in enumerate(GENERIC_QUESTIONS, 1)])
     errs, pend = check(spec)
     if errs:
         print("ERRORES en el spec de red:")
@@ -517,13 +509,13 @@ def main(args):
             print("  -", e)
         return 1
     d = pathlib.Path(a.out) / "02-arquitectura"
-    write(d / "red.html", render_html(spec, theme, a.icons_dir, a.mask_ips, pend))
+    write(d / "arquitectura.html", render_html(spec, theme, a.icons_dir, a.mask_ips, pend))
     svg = render_svg(spec, theme, a.icons_dir, a.mask_ips, True)
-    write(d / "red.svg", mask_text(svg) if a.mask_ips else svg)
+    write(d / "arquitectura-red.svg", mask_text(svg) if a.mask_ips else svg)
     md = ["# Pendientes por confirmar (red)\n"] + ([f"{i}. {p}" for i, p in enumerate(pend, 1)] or ["Sin pendientes."])
-    write(d / "red-pendientes.md", "\n".join(md) + "\n")
+    write(d / "arquitectura-red-pendientes.md", "\n".join(md) + "\n")
     print(f"OK red: {len(spec.get('sites', []))} sitios, {len(spec.get('segments', []))} segmentos, {len(spec.get('nodes', []))} componentes, "
-          f"{len(spec.get('flows', []))} flujos → {d}/red.html")
+          f"{len(spec.get('flows', []))} flujos → {d}/arquitectura.html")
     if pend:
         print(f"\nPENDIENTES POR CONFIRMAR ({len(pend)}): pregúntaselos al usuario antes de dar el diagrama por terminado:")
         for p in pend:

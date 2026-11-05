@@ -12,7 +12,7 @@ Una sola skill, cinco entregables, todo en `docs/` del proyecto:
 | 1. Grafo | Entiende módulos, entradas, rutas, entornos y tablas; **reutiliza** un grafo existente | `docs/00-grafo/graph.json`, `GRAPH_REPORT.md`, `graph.html` (visor interactivo) |
 | 2. Flujos | Flujos de operación (diagrama de flujo y de secuencia) | `docs/01-flujos/*.svg`, `flujos.html`, `flujos.md` (Mermaid) |
 | 3. Arquitectura | Componentes agrupados, con icono por tecnología | `docs/02-arquitectura/arquitectura.drawio` + `.svg` |
-| 3b. Red y despliegue | Sitios (on-prem/AWS/Azure/SAP/SaaS), segmentos con CIDR, IPs, elementos de red y flujos numerados | `docs/02-arquitectura/red.html` (interactivo) + `red.svg` + `red-pendientes.md` |
+| 3b. Arquitectura de red | Sitios (on-prem/AWS/Azure/SAP/SaaS), segmentos con CIDR, IPs, elementos de red y flujos **animados**; pestaña para **completar datos** y guardarlos en el HTML | `docs/02-arquitectura/arquitectura.html` + `arquitectura-red.svg` + `arquitectura-red-pendientes.md` |
 | 4. Datos | Modelo ER + volúmenes y crecimiento a 6/12/24/36 meses (medido con muestra de 7 días o por tasa de negocio) | `docs/03-modelo-datos/modelo-datos.drawio`, `.svg`, `volumenes.md`, `.mmd`, `consultas-volumen.sql` |
 | 6. Todo en uno | Un HTML con todo lo anterior en pestañas o diapositivas | `docs/documentacion.html` |
 
@@ -91,7 +91,14 @@ Lo que el usuario no sepa queda como pendiente visible en el diagrama (nodo con 
 ```bash
 python3 S/scripts/tdocs.py net docs/spec/network.json -o docs      # [--mask-ips] [--strict]
 ```
-Escribe en consola y en `red-pendientes.md` las preguntas que aún faltan (ej. «¿el flujo 2 cruza de sitio: hay firewall/VPN en medio?»). Itera preguntando hasta que la lista esté vacía o el usuario acepte los huecos. `red.html` permite resaltar cada flujo (chips, líneas o número), ver su tabla de saltos con IP y puerto, y ocultar IPs con un botón para capturas.
+Escribe en consola y en `arquitectura-red-pendientes.md` las preguntas que aún faltan (sitio, **IP exacta**, segmento, firewall/VPN en cada salto que cruza de sitio, protocolo/puerto, preguntas generales de ambiente/DNS/balanceador). Itera preguntando hasta que la lista esté vacía o el usuario acepte los huecos.
+
+**`arquitectura.html`** (el diagrama se dibuja en el navegador desde el JSON embebido):
+- Pestaña **Diagrama**: al elegir un flujo, un paquete recorre cada salto en orden (con leyenda del salto, puerto y elemento de red), los puntos blancos marcan el sentido, y se puede pausar/repetir (respeta «reducir movimiento»).
+- Pestaña **Completar datos**: formulario por sitio, segmento (CIDR), componente (**sitio, segmento, IP exacta, host, puerto**), flujo (nombre de la integración, protocolo, elemento de red en cada salto) y preguntas generales con respuesta libre. Lo faltante se marca en rojo y el diagrama se actualiza al instante.
+- **«💾 Guardar en el HTML»** reescribe el propio archivo con los datos dentro (Chrome/Edge: elige el archivo; otros navegadores: descarga la copia). **«⬇ Exportar network.json»** entrega el spec completo: reemplaza `docs/spec/network.json` y vuelve a ejecutar `tdocs net` para regenerar con el layout definitivo. Mientras no guarde, queda un borrador en el navegador (localStorage).
+- Cuando el usuario diga «ya completé los datos», pídele el `network.json` exportado (o el HTML guardado) y léelo: ahí están las respuestas.
+- Con `--mask-ips` la copia es de solo lectura (IPs enmascaradas).
 
 ### 4. Modelo de datos con volúmenes
 Escribe `docs/spec/erd.json`. Fuentes del esquema, en orden: DDL/Prisma detectado en `graph.json → schema_ddl`; migraciones/ORM del repo; si no hay nada, columnas inferidas de las consultas (`tables_referenced_in_code`) con `inferred: true`.

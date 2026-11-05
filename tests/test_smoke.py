@@ -46,13 +46,13 @@ class Smoke(unittest.TestCase):
     def test_network_render_and_mask(self):
         with tempfile.TemporaryDirectory() as out:
             run("net", str(ROOT / "examples/network.json"), "-o", out)
-            html = (pathlib.Path(out) / "02-arquitectura/red.html").read_text(encoding="utf-8")
+            html = (pathlib.Path(out) / "02-arquitectura/arquitectura.html").read_text(encoding="utf-8")
             self.assertIn("10.20.4.22", html)
             self.assertIn("Ocultar IPs", html)
-            xml.dom.minidom.parse(str(pathlib.Path(out) / "02-arquitectura/red.svg"))
+            xml.dom.minidom.parse(str(pathlib.Path(out) / "02-arquitectura/arquitectura-red.svg"))
         with tempfile.TemporaryDirectory() as out:
             run("net", str(ROOT / "examples/network.json"), "-o", out, "--mask-ips")
-            for f in ("red.html", "red.svg", "red-pendientes.md"):
+            for f in ("arquitectura.html", "arquitectura-red.svg", "arquitectura-red-pendientes.md"):
                 blob = (pathlib.Path(out) / "02-arquitectura" / f).read_text(encoding="utf-8")
                 self.assertNotIn("10.20.4.22", blob)
                 self.assertNotIn("10.50.8.15", blob)
@@ -98,7 +98,7 @@ class Smoke(unittest.TestCase):
             run("analyze", str(r), "-o", out)
             run("net-init", str(pathlib.Path(out) / "00-grafo/graph.json"), "-o", str(pathlib.Path(out) / "spec/network.json"))
             run("net", str(pathlib.Path(out) / "spec/network.json"), "-o", out)
-            self.assertTrue((pathlib.Path(out) / "02-arquitectura/red.html").exists())
+            self.assertTrue((pathlib.Path(out) / "02-arquitectura/arquitectura.html").exists())
 
     def test_graph_reuse_and_html(self):
         with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as out:
@@ -123,6 +123,35 @@ class Smoke(unittest.TestCase):
             html = (pathlib.Path(out) / "00-grafo/graph.html").read_text(encoding="utf-8")
             self.assertIn('"nodes"', html)
             self.assertIn("canvas", html)
+
+    def test_arquitectura_html_is_interactive(self):
+        with tempfile.TemporaryDirectory() as out:
+            run("net", str(ROOT / "examples/network.json"), "-o", out)
+            html = (pathlib.Path(out) / "02-arquitectura/arquitectura.html").read_text(encoding="utf-8")
+            for needle in ('id="spec"', "Completar datos", "Guardar en el HTML", "@keyframes flow", "prefers-reduced-motion"):
+                self.assertIn(needle, html)
+            self.assertFalse((pathlib.Path(out) / "02-arquitectura/red.html").exists())
+            svg = (pathlib.Path(out) / "02-arquitectura/arquitectura-red.svg").read_text(encoding="utf-8")
+            self.assertIn('class="pkt"', svg)                      # flujos con movimiento también en el SVG
+        import shutil
+        node = shutil.which("node")
+        if node:
+            r = subprocess.run([node, "--check", str(ROOT / "scripts/net_app.js")], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_net_answers_resolve_pending(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import net
+        spec = {"sites": [{"id": "a", "label": "AWS", "kind": "aws"}, {"id": "o", "label": "DC", "kind": "onprem"}],
+                "nodes": [{"id": "x", "name": "API", "site": "a", "segment": "g", "ip": "10.0.0.1"}, {"id": "y", "name": "BD", "site": "o", "segment": "h", "ip": "10.1.1.1"}],
+                "segments": [{"id": "g", "site": "a", "label": "G", "cidr": "10.0.0.0/24"}, {"id": "h", "site": "o", "label": "H", "cidr": "10.1.1.0/24"}],
+                "flows": [{"id": "1", "label": "x", "protocol": "TCP 1433", "hops": ["x", "y"]}],
+                "questions": [{"id": "q", "text": "¿Ambiente?", "answer": ""}]}
+        _, pend = net.check(spec)
+        self.assertTrue(any("firewall" in p for p in pend) and "¿Ambiente?" in pend)
+        spec["flows"][0]["via"] = {"1": "FW-01 10.0.0.254"}
+        spec["questions"][0]["answer"] = "PRD"
+        self.assertEqual(net.check(spec)[1], [])
 
     def test_arch_pending_questions(self):
         sys.path.insert(0, str(ROOT / "scripts"))
@@ -180,7 +209,7 @@ class Smoke(unittest.TestCase):
             html = (o / "documentacion.html").read_text(encoding="utf-8")
             self.assertIn("Demo", html)
             self.assertIn("Presentar", html)
-            self.assertIn("<iframe", html)                      # red.html embebido
+            self.assertIn("<iframe", html)                      # arquitectura.html embebido
             self.assertIn('disabled', html)                     # secciones no generadas (grafo, flujos) deshabilitadas
             run("report", "-o", out, "--mask-ips")
             self.assertNotIn("10.20.4.22", (o / "documentacion.html").read_text(encoding="utf-8"))

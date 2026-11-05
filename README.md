@@ -6,7 +6,7 @@
 
 ## Vista previa (datos ficticios)
 
-**Red y despliegue** · sitios, segmentos con CIDR, IPs, elementos de red y flujos numerados (en `red.html` se resaltan al hacer clic):
+**Red y despliegue** · sitios, segmentos con CIDR, IPs, elementos de red y flujos numerados (en `arquitectura.html` al elegir un flujo se anima su recorrido salto a salto):
 
 ![Ejemplo de arquitectura de red](assets/ejemplo-red.svg)
 
@@ -23,7 +23,7 @@
 | 1 | Grafo del proyecto | `docs/00-grafo/graph.json`, `GRAPH_REPORT.md` |
 | 2 | Flujos de operación | `docs/01-flujos/*.svg`, `flujos.html`, `flujos.md` (Mermaid) |
 | 3 | Arquitectura con iconos | `docs/02-arquitectura/arquitectura.drawio` + `.svg` |
-| 3b | **Red y despliegue** (sitios on-prem/AWS/Azure/SAP, segmentos/CIDR, IPs, firewalls/VPN, flujos numerables) | `docs/02-arquitectura/red.html` (interactivo), `red.svg`, `red-pendientes.md` |
+| 3b | **Arquitectura de red** (sitios on-prem/AWS/Azure/SAP, segmentos/CIDR, IPs, firewalls/VPN, flujos animados, pestaña para completar datos y guardarlos en el HTML) | `docs/02-arquitectura/arquitectura.html`, `arquitectura-red.svg`, `arquitectura-red-pendientes.md` |
 | 1b | **Visor del grafo** (reutiliza grafos existentes, p. ej. graphify, sin releer el código) | `docs/00-grafo/graph.html` |
 | 4 | Modelo ER + volúmenes | `docs/03-modelo-datos/modelo-datos.drawio`, `.svg`, `volumenes.md`, `.mmd` |
 

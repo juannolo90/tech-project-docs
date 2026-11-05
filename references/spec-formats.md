@@ -40,7 +40,7 @@ Significado: `azul` títulos y alta jerarquía · `azul_med` conexiones/subtítu
 - Un nodo con `kind` de red (`firewall`, `gateway`, `vpn`, `lb`, `proxy`, `router`, `dns`) se dibuja con borde rojo punteado.
 - `hops` = recorrido ordenado de nodos; cada par consecutivo es un salto. Un hop puede ser `{"id","label"}` para rotular el puerto de ese salto.
 - Sin `site`/`ip`/`segment`/`protocol`, o un flujo que cruza de sitio sin elemento de red, se reporta como **pendiente por confirmar** (no se inventa).
-- `--mask-ips` deja `10.20.x.x` en todas las salidas; sin la bandera, `red.html` incluye un botón «Ocultar IPs».
+- `--mask-ips` deja `10.20.x.x` en todas las salidas; sin la bandera, `arquitectura.html` incluye un botón «Ocultar IPs» y una pestaña **Completar datos**. Campos opcionales: `flows[].integration` (nombre de la integración), `flows[].via` (`{"1":"Firewall FW-01 10.20.0.10"}` = elemento de red en el salto 1), `questions` (`[{"id","text","answer"}]`).
 - Ejemplo ficticio completo: `examples/network.json`.
 
 ## erd.json
