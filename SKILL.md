@@ -32,6 +32,7 @@ Frases como: «genera documentación proyecto tecnológico», «documenta este p
 4b. **Revisa visualmente** cada diagrama (paso «Verificar») antes de entregarlo. Un diagrama con flechas sobre texto no está terminado.
 5. **Nunca consultes una base de datos sin que el usuario lo autorice** (solo lectura, solo `SELECT`/`COUNT`, sin guardar credenciales).
 5b. **Pide confirmación antes de escribir dentro del repo del usuario** si `docs/` ya existe.
+5c. **Cada comando (`arch`, `net`, `erd`) termina con «PENDIENTES POR CONFIRMAR».** Si aparece esa lista, tu siguiente acción es preguntarla al usuario con AskUserQuestion, no entregar.
 6. Responde en el idioma del usuario (por defecto español). Títulos y etiquetas de los diagramas en ese idioma.
 
 ## Flujo de trabajo
@@ -94,8 +95,8 @@ Escribe en consola y en `red-pendientes.md` las preguntas que aún faltan (ej. �
 
 ### 4. Modelo de datos con volúmenes
 Escribe `docs/spec/erd.json`. Fuentes del esquema, en orden: DDL/Prisma detectado en `graph.json → schema_ddl`; migraciones/ORM del repo; si no hay nada, columnas inferidas de las consultas (`tables_referenced_in_code`) con `inferred: true`.
-**Volumetría: pregunta cómo obtenerla** (AskUserQuestion) — nunca asumas acceso:
-1. **¿Puedo consultar la base de datos (solo lectura)?** Opciones: *Sí, tengo una conexión/herramienta de solo lectura* · *No, te paso el SQL y lo ejecuto yo* · *No tengo acceso a la BD*.
+**OBLIGATORIO — antes de dar los volúmenes por terminados, llama a AskUserQuestion** (los scripts también imprimen estas preguntas como `PENDIENTES POR CONFIRMAR` y las guardan en `volumenes-pendientes.md`; no las ignores). Pregunta cómo obtener la volumetría y nunca asumas acceso:
+1. **¿Puedo consultar la base de datos (solo lectura) para medir filas y crecimiento?** Opciones: *Sí, tengo una conexión/herramienta de solo lectura* · *No, te paso el SQL y lo ejecuto yo* · *No tengo acceso a la BD*.
 2. Si **sí**: genera el SQL, **muéstraselo** y ejecútalo solo si el usuario confirma que la conexión es de solo lectura (idealmente réplica/QA). Solo `SELECT`/`COUNT`; no guardes credenciales ni cadenas de conexión en ningún archivo.
 3. Si **no ejecutas tú**: entrega `consultas-volumen.sql` y pide que pegue el resultado (CSV).
 ```bash

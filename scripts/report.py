@@ -125,21 +125,13 @@ def build(out_dir, title, mask):
     else:
         tabs.append(("datos", "Datos y volúmenes", None))
     pend = []
-    for f, lab in (("02-arquitectura/arquitectura-pendientes.md", "Arquitectura"), ("02-arquitectura/red-pendientes.md", "Red")):
+    for f, lab in (("02-arquitectura/arquitectura-pendientes.md", "Arquitectura"), ("02-arquitectura/red-pendientes.md", "Red"),
+                   ("03-modelo-datos/volumenes-pendientes.md", "Volúmenes")):
         p = d / f
         if p.exists():
             items = [re.sub(r"^\d+\.\s*", "", x) for x in p.read_text(encoding="utf-8").splitlines() if re.match(r"\d+\.", x)]
             if items:
                 pend.append(f'<div class="card"><h3>{lab}</h3><ol>' + "".join(f"<li>{esc(i)}</li>" for i in items) + "</ol></div>")
-    spec = d / "spec" / "erd.json"
-    if spec.exists():
-        try:
-            miss = [e["name"] for e in read_json(spec).get("entities", []) if not (e.get("volume") or {}).get("rows") and (e.get("volume") or {}).get("rows_per_month") is None]
-            if miss:
-                pend.append('<div class="card"><h3>Volúmenes</h3><p>Sin medir ni supuesto: ' + esc(", ".join(miss))
-                            + '. Ejecuta <code>consultas-volumen.sql</code> (solo lectura) o indica una tasa diaria.</p></div>')
-        except Exception:
-            pass
     tabs.append(("pend", f"Pendientes{' (' + str(len(pend)) + ')' if pend else ''}", "".join(pend) or '<p>Sin pendientes registrados.</p>'))
     return tabs
 

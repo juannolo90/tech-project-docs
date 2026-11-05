@@ -158,6 +158,11 @@ class Smoke(unittest.TestCase):
         self.assertEqual(volsql.build_sql({"entities": [{"name": "x; DROP TABLE y", "columns": []}]}, "mssql", 7)[0].count("DROP"), 1)  # solo en comentario
         self.assertNotIn("FROM x; DROP", volsql.build_sql({"entities": [{"name": "x; DROP TABLE y", "columns": []}]}, "mssql", 7)[0])
 
+    def test_erd_asks_about_db_access(self):
+        out = run("erd", str(ROOT / "examples/erd.json"), "-o", tempfile.mkdtemp())
+        self.assertIn("PENDIENTES POR CONFIRMAR", out)
+        self.assertIn("¿Puedo consultar la base de datos", out)
+
     def test_volapply_and_report(self):
         with tempfile.TemporaryDirectory() as out:
             o = pathlib.Path(out)

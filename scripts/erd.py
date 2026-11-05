@@ -36,6 +36,25 @@ def normalize(spec):
     return spec
 
 
+def check(spec):
+    """Preguntas de volumetría que el agente DEBE hacer al usuario (acceso a la BD, tasas de negocio, crecimiento)."""
+    import volsql
+    ents = spec["entities"]
+    q = []
+    nomed = [e for e in ents if not (e.get("volume") or {}).get("rows") and (e.get("volume") or {}).get("rows_per_month") is None]
+    if nomed:
+        q.append("¿Puedo consultar la base de datos (solo lectura) para medir filas y crecimiento? Opciones: (a) sí, tengo una conexión de solo lectura; "
+                 "(b) no, te paso `consultas-volumen.sql` y lo ejecutas tú; (c) no hay acceso a la BD.")
+    for e in nomed:
+        if not volsql.date_column(e):
+            q.append(f"«{e['name']}» no tiene columna de fecha: ¿cuántos registros se crean al día o a la semana? (o ¿cuántos por cada registro padre?)")
+    for e in ents:
+        v = e.get("volume") or {}
+        if v.get("rows") and v.get("rows_per_month") is None and v.get("growth_pct_month") is None:
+            q.append(f"«{e['name']}»: ya hay total ({human(v['rows'])}) pero falta el crecimiento: ¿cuántos registros nuevos al día/mes? (o ejecuta la muestra de 7 días)")
+    return q
+
+
 def project(vol, months):
     if not vol or vol.get("rows") is None:
         return None
@@ -327,3 +346,11 @@ def main(args):
     write(f"{base}/volumenes.md", to_md(spec))
     miss = [e["name"] for e in spec["entities"] if not (e.get("volume") or {}).get("rows") and (e.get("volume") or {}).get("rows_per_month") is None]
     print(f"OK modelo de datos: {len(spec['entities'])} entidades → {base}/" + (f" · sin volumen medido: {', '.join(miss)}" if miss else ""))
+    pend = check(spec)
+    md = ["# Pendientes por confirmar (volúmenes)" + chr(10)] + ([f"{i}. {x}" for i, x in enumerate(pend, 1)] or ["Sin pendientes."])
+    write(f"{base}/volumenes-pendientes.md", chr(10).join(md) + chr(10))
+    if pend:
+        print(f"{chr(10)}PENDIENTES POR CONFIRMAR ({len(pend)}): pregúntaselos al usuario (AskUserQuestion) antes de dar los volúmenes por terminados:")
+        for x in pend:
+            print("  ?", x)
+        print("  → SQL de solo lectura: tdocs volsql <erd.json> --dialect <motor>  ·  luego tdocs volapply resultados.csv")
