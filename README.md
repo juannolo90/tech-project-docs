@@ -4,6 +4,18 @@
 
 > One skill, one sentence: *"generate technology project documentation"* → code graph, operating flows, architecture (`.drawio`) and an ER model with row volumes and growth projection. Spanish-first; works with any agent that supports `SKILL.md` skills.
 
+## Vista previa (datos ficticios)
+
+**Red y despliegue** · sitios, segmentos con CIDR, IPs, elementos de red y flujos numerados (en `red.html` se resaltan al hacer clic):
+
+![Ejemplo de arquitectura de red](assets/ejemplo-red.svg)
+
+**Arquitectura** · componentes agrupados con un icono por tecnología:
+
+![Ejemplo de arquitectura](assets/ejemplo-arquitectura.svg)
+
+> Mock-up generado con `examples/` (empresa y direcciones inventadas). Los iconos de marca no se incluyen en el repo: se descargan al ejecutar; aquí se muestran pictogramas genéricos.
+
 ## Qué genera
 
 | # | Entregable | Archivos |

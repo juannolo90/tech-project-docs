@@ -22,7 +22,7 @@
     {"id": "fw", "name": "Firewall perimetral", "role": "inspección L7", "icon": "lock", "site": "aws", "segment": "sn_fw", "ip": "10.20.0.10", "kind": "firewall"},
     {"id": "tgw", "name": "Transit Gateway", "role": "enrutamiento entre VPC", "icon": "refresh", "site": "aws", "segment": "vpc_net", "ip": "10.20.0.1", "kind": "gateway"},
     {"id": "web", "name": "SPA React", "role": "nginx + estáticos", "icon": "react", "site": "aws", "segment": "sn_app", "ip": "10.20.4.21", "port": 443},
-    {"id": "api", "name": "API REST", "role": "Node.js · Express", "icon": "express", "tile": "dark", "site": "aws", "segment": "sn_app", "ip": "10.20.4.22", "port": 3000},
+    {"id": "api", "name": "API REST", "role": "Node.js · Express", "icon": "express", "site": "aws", "segment": "sn_app", "ip": "10.20.4.22", "port": 3000},
     {"id": "dx", "name": "Direct Connect", "role": "enlace a datacenter", "icon": "plug", "site": "onprem", "ip": "10.50.0.2", "kind": "vpn"},
     {"id": "db", "name": "SQL Server", "role": "base de datos principal", "icon": "microsoftsqlserver", "site": "onprem", "segment": "vlan_db", "ip": "10.50.8.15", "port": 1433, "kind": "db"},
     {"id": "s4", "name": "S/4HANA", "role": "ERP productivo", "icon": "database", "site": "sap", "segment": "sap_net", "ip": "10.60.0.10", "port": 443},
